@@ -1509,9 +1509,14 @@ function planTableXml(){
   const W = [700,1450,750,800,450,850], H = ["Jour","Agents chimiques","N° GEH","Nb total de prélèvements","Type de VLEP","Plage horaire de prélèvement"];
   let x = '<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/><w:tblCellMar><w:left w:w="70" w:type="dxa"/><w:right w:w="70" w:type="dxa"/></w:tblCellMar><w:tblLook w:val="04A0" w:firstRow="1" w:lastRow="0" w:firstColumn="1" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/></w:tblPr><w:tblGrid><w:gridCol w:w="1384"/><w:gridCol w:w="3230"/><w:gridCol w:w="1382"/><w:gridCol w:w="1221"/><w:gridCol w:w="720"/><w:gridCol w:w="1842"/></w:tblGrid>';
   x += '<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="636"/><w:tblHeader/></w:trPr>'+H.map((h,i)=>pcell(W[i],[h],i?"4F81BD":"3381C7",'<w:b/><w:bCs/><w:color w:val="FFFFFF"/>')).join("")+'</w:tr>';
+  const gl = gehList();
+  /* GEH vide dans le plan : on le déduit des tâches où l'agent est utilisé (export seulement, le plan n'est pas modifié) */
+  const gehCell = r => { const g = planGeh(r); if(g) return [g]; const ids = new Set();
+    planAgents(r).forEach(a=>gehsOfAgent(a, gl).forEach(id=>ids.add(id))); return ids.size ? gl.filter(g=>ids.has(g.id)).map(g=>String(g.n)) : [""]; };
   S.plan.forEach(r=>{
     if(r.kind==="sec"){ x += '<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="400"/></w:trPr>'+pcell(5000,[r.txt||""],"95B3D7",'<w:b/><w:bCs/>',6)+'</w:tr>'; return; }
-    const cells = [[(r.jour||"").trim()],planAgents(r),[planGeh(r)],[r.nb==null?"":String(r.nb)],[r.type||""],[(r.plage||"").trim()]];
+    if(!planAgents(r).length) return; /* ligne sans agent : rien à publier */
+    const cells = [[(r.jour||"").trim()],planAgents(r),gehCell(r),[r.nb==null?"":String(r.nb)],[r.type||""],[(r.plage||"").trim()]];
     x += '<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="528"/></w:trPr>'+cells.map((c,i)=>pcell(W[i],c.filter((t,j)=>t!==""||c.length===1),i?"B8CCE4":"95B3D7","")).join("")+'</w:tr>';
   });
   return x+'</w:tbl>';
@@ -1695,7 +1700,7 @@ function gehIdsOfRow(r, gl){
 function gehsOfAgent(name, gl){ return gl.filter(g=>{ const gg = S.ateliers.flatMap(a=>a.gehs).find(x=>x.id===g.id); return gg && (gg.taches||[]).some(k=>prodMatch(k.prod, name)); }).map(g=>g.id); }
 /* GEH homonymes : on ajoute l'atelier */
 function gehNames(gl){ const cnt = {}; gl.forEach(g=>{ cnt[norm(g.des)] = (cnt[norm(g.des)]||0)+1; }); const o = {};
-  gl.forEach(g=>{ o[g.id] = g.label + (cnt[norm(g.des)]>1 && g.atelier ? " ("+g.atelier+")" : ""); }); return o; }
+  gl.forEach(g=>{ o[g.id] = g.label + (cnt[norm(g.des)]>1 && g.atelier && norm(g.atelier)!==norm(g.des) ? " ("+g.atelier+")" : ""); }); return o; }
 /* par agent du plan : lignes, GEH, tâches concernées (durée / fréquence lues dans l'un ou l'autre champ) */
 function jAgentInfo(rows, gl){
   const map = new Map(), G = id => S.ateliers.flatMap(a=>a.gehs).find(x=>x.id===id);

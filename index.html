@@ -1642,38 +1642,127 @@ const J_LIB = [
   ["infos","infos.E","Afin de limiter le nombre de pompes portées par un opérateur, des dérivations, permettant un prélèvement simultané sur deux tubes de perte de charge identique, seront utilisées."],
   ["infos","infos.F","Pour le méthanol, dont la durée du prélèvement doit être limitée pour éviter la migration de la première zone du tube vers la seconde zone, plusieurs prélèvements successifs de 2h seront réalisés afin de couvrir la totalité du poste de travail."]
 ];
-function perYear(f){
-  f = String(f||"").toLowerCase(); if(!f.trim()) return null; if(/quotidien|tous les jours/.test(f)) return 250;
-  const m = /(\d+(?:[.,]\d+)?)\s*x?\s*\/?\s*(sem|mois|an|jour|j\b)/.exec(f); if(!m) return null; const n = parseFloat(m[1].replace(",","."));
-  return n * ({sem:52, mois:12, an:1, jour:250, j:250})[m[2]];
+/* ---- aides pour la génération des justifications (GEH + agents visés) ---- */
+const J_FEM = /^(fraction|silice|colle|huile|peinture|laine|r[ée]sine|soude|potasse|ammoniaque|vapeur|fibre|fum[ée]e|poussi[èe]re|poudre|cendre|mousse|encre)/i;
+const J_ACRO = /^[A-Z0-9][A-Z0-9\-]{2,9}$/;
+function agShort(name){
+  let n = String(name||"").split(" — ")[0].trim();
+  const m = /\(([^)]+)\)/.exec(n);
+  if(m){ const p = m[1].trim(); if(J_ACRO.test(p) || /^\d/.test(p)) return p; }
+  n = n.replace(/\s*\([^)]*\)/g,"").replace(/\s+et (ses )?compos[ée]s.*$/i,"").replace(/\s+total\b.*$/i,"").trim();
+  return n || String(name||"").trim();
 }
+/* "l’acétone", "le méthanol", "les poussières inhalables" */
+function agRef(name, cap){
+  const n = agShort(name), acro = J_ACRO.test(n) || /^\d/.test(n), w = acro ? n : n.charAt(0).toLowerCase()+n.slice(1);
+  const pl = /^(poussi[èe]res|fibres|fum[ée]es|vapeurs|huiles|colles)\b/i.test(w);
+  const art = pl ? "les " : (!acro && /^[aeiouyàâäéèêëîïôöùûüœh]/i.test(w)) ? "l’" : (J_FEM.test(w) ? "la " : "le ");
+  const s = (art+w).replace(/'/g,"’"); return {txt: cap ? s.charAt(0).toUpperCase()+s.slice(1) : s, pl};
+}
+function jJoin(a){ a = a.filter(Boolean); return a.length<2 ? (a[0]||"") : a.slice(0,-1).join(", ")+" et "+a[a.length-1]; }
+function taskLbl(t){ let s = String(t||"").replace(/\s*\([^)]*\)/g,"").replace(/\s+/g," ").trim(); if(s && !/^[A-Z]{2,}/.test(s)) s = s.charAt(0).toLowerCase()+s.slice(1); return s; }
+/* durée en minutes ("15 minutes", "4 heures", "1h30") */
+function jDur(s){ s = String(s||"").toLowerCase().replace(",",".");
+  let m = /(\d+(?:\.\d+)?)\s*(?:heures?|h)(?![a-z])\s*(\d{1,2})?/.exec(s); if(m) return parseFloat(m[1])*60 + (m[2] ? parseInt(m[2],10) : 0);
+  m = /(\d+(?:\.\d+)?)\s*min/.exec(s); return m ? parseFloat(m[1]) : null; }
+/* fréquence : nombre de fois par an / par jour ("1 fois / semaine", "2 fois/an", "1 fois/jour") */
+function perYear(f){
+  f = String(f||"").toLowerCase(); if(!f.trim()) return null;
+  if(/quotidien|tous les jours|chaque jour/.test(f)) return 250; if(/hebdo/.test(f)) return 52; if(/mensuel/.test(f)) return 12; if(/annuel/.test(f)) return 1;
+  const m = /(\d+(?:[.,]\d+)?)\s*(?:x|fois)?\s*(?:\/|par)?\s*(sem|mois|an\b|ans\b|jour|j\b|quinz)/.exec(f); if(!m) return null;
+  const n = parseFloat(m[1].replace(",",".")), u = m[2]; return n * (u==="sem"?52 : u==="mois"?12 : /^an/.test(u)?1 : u==="quinz"?24 : 250);
+}
+function perDay(f){ f = String(f||"").toLowerCase(); if(/quotidien/.test(f)) return 1; if(/plusieurs fois\s*(\/|par)?\s*jour/.test(f)) return 2;
+  const m = /(\d+(?:[.,]\d+)?)\s*(?:x|fois)\s*(?:\/|par)?\s*(?:jour|j\b)/.exec(f); return m ? parseFloat(m[1].replace(",",".")) : null; }
+/* une tâche nommée + les lignes suivantes sans nom (produits supplémentaires de la même tâche) */
+function taskGroups(g){ const out = []; let cur = null;
+  (g.taches||[]).forEach(k=>{ if((k.t||"").trim()){ cur = {name:k.t.trim(), items:[k]}; out.push(cur); } else if(cur) cur.items.push(k); else { cur = {name:"", items:[k]}; out.push(cur); } });
+  return out; }
+function jProds(k){ return String(k.prod||"").split(/;|\n|\//).map(x=>x.trim()).filter(x=>x && !/^\/?$/.test(x)); }
+function jKeys(name){ const full = String(name||"").split(" — ")[0], ks = new Set([norm(full), norm(agShort(name))]);
+  (full.match(/\(([^)]+)\)/g)||[]).forEach(x=>ks.add(norm(x.slice(1,-1)))); return [...ks].filter(x=>x.length>=4); }
+function prodMatch(prod, name){ const keys = jKeys(name); return jProds({prod}).some(p0=>{ const p = norm(p0); if(!p) return false;
+  return keys.some(k=> k===p || k.startsWith(p+" ") || p.startsWith(k+" ") || (p.split(" ").length<=3 && p.split(" ").includes(k))); }); }
+/* GEH visés par une ligne du plan (GEH choisi, ou texte libre "1" / "GEH 2" / nom) */
+function gehIdsOfRow(r, gl){
+  if(r.gehId && r.gehId!=="__txt") return gl.some(g=>g.id===r.gehId) ? [r.gehId] : [];
+  if(r.gehId==="__txt" && (r.gehTxt||"").trim()){ const t = r.gehTxt, nums = (t.match(/\d+/g)||[]).map(Number), nt = norm(t), ids = new Set();
+    gl.forEach(g=>{ const gg = S.ateliers.flatMap(a=>a.gehs).find(x=>x.id===g.id), ln = parseInt((/\d+/.exec((gg&&gg.num)||"")||[])[0],10);
+      if(nums.includes(g.n) || (!isNaN(ln) && nums.includes(ln)) || (nt.length>3 && (norm(g.des)===nt || norm(g.label)===nt))) ids.add(g.id); });
+    return [...ids]; }
+  return [];
+}
+function gehsOfAgent(name, gl){ return gl.filter(g=>{ const gg = S.ateliers.flatMap(a=>a.gehs).find(x=>x.id===g.id); return gg && (gg.taches||[]).some(k=>prodMatch(k.prod, name)); }).map(g=>g.id); }
+/* GEH homonymes : on ajoute l'atelier */
+function gehNames(gl){ const cnt = {}; gl.forEach(g=>{ cnt[norm(g.des)] = (cnt[norm(g.des)]||0)+1; }); const o = {};
+  gl.forEach(g=>{ o[g.id] = g.label + (cnt[norm(g.des)]>1 && g.atelier ? " ("+g.atelier+")" : ""); }); return o; }
+/* par agent du plan : lignes, GEH, tâches concernées (durée / fréquence lues dans l'un ou l'autre champ) */
+function jAgentInfo(rows, gl){
+  const map = new Map(), G = id => S.ateliers.flatMap(a=>a.gehs).find(x=>x.id===id);
+  rows.forEach(r=>planAgents(r).forEach(name=>{ const key = norm(name); if(!key) return;
+    let I = map.get(key); if(!I){ I = {name, a:S.agents.find(x=>norm(x.agent)===key), rows:[], gehs:new Set(), tasks:[]}; map.set(key,I); }
+    I.rows.push(r); gehIdsOfRow(r, gl).forEach(id=>I.gehs.add(id)); }));
+  map.forEach(I=>{ if(!I.gehs.size) gehsOfAgent(I.name, gl).forEach(id=>I.gehs.add(id));
+    I.gehs.forEach(id=>{ const g = G(id); if(!g) return;
+      taskGroups(g).forEach(gr=>{ const head = gr.items[0]; gr.items.forEach(k=>{ if(!prodMatch(k.prod, I.name)) return;
+        const own = x => jDur(x.duree)!=null ? jDur(x.duree) : jDur(x.freq), fr = x => perYear(x.freq)!=null ? perYear(x.freq) : perYear(x.duree), pd = x => perDay(x.freq)!=null ? perDay(x.freq) : perDay(x.duree);
+        I.tasks.push({gid:id, name:gr.name, dur: own(k)!=null ? own(k) : own(head), year: fr(k)!=null ? fr(k) : fr(head), day: pd(k)!=null ? pd(k) : pd(head)}); }); }); });
+  });
+  return map;
+}
+const J_SHORT_PLAGE = /^(15min|Entre 15min et 1h|Entre 1 et 4h)$/;
 function genJust(){
   const kept = (S.just||[]).filter(it=>!it.auto || it.edited), keepKeys = new Set(kept.map(it=>it.key).filter(Boolean)), out = [];
+  const gl = gehList(), gn = {}; gl.forEach(g=>gn[g.id] = g.n); const GN = gehNames(gl);
+  const rows = S.plan.filter(r=>r.kind!=="sec"), INFO = jAgentInfo(rows, gl), infos = [...INFO.values()];
+  const hasPlan = infos.length>0, gtxt = ids => ids.length ? (ids.length>1 ? "les GEH " : "le GEH ")+jJoin(ids.map(id=>gn[id])) : "le GEH "+TBC;
+  const oneGeh = I => I.gehs.size===1 ? [...I.gehs][0] : "";
+  /* bibliothèque générale (propositions non retenues par défaut) */
+  const libOut = []; const addLib = (sec,key,txt,on)=>{ if(keepKeys.has(key)) return; libOut.push({id:uid(), sec, key, txt, list:[], on, auto:true, edited:false, geh:"", lib:true}); };
   const add = (sec,key,txt,on,list,geh) => { if(keepKeys.has(key)) return; out.push({id:uid(), sec, key, txt, list:list||[], on, auto:true, edited:false, geh:geh||""}); };
-  const gl = gehList(), gn = {}; gl.forEach(g=>gn[g.id] = g.n);
-  const rows = S.plan.filter(r=>r.kind!=="sec");
-  J_LIB.forEach(([sec,key,txt])=>{ add(sec,key,txt,false); });
-  /* règles : on active / on ajoute des items calculés */
-  const setOn = (key,on)=>{ const it = out.find(x=>x.key===key); if(it) it.on = on; };
+  J_LIB.forEach(([sec,key,txt])=>{ addLib(sec,key,txt,false); });
+  const setOn = (key,on)=>{ const it = libOut.find(x=>x.key===key); if(it) it.on = on; };
   setOn("elim.A", true); setOn("per.A", true);
-  const unc = gl.filter(g=>!rows.some(r=>r.gehId===g.id)).map(g=>g.label);
-  if(unc.length) add("elim","elim.unc","Les GEH suivants ne font pas l’objet de prélèvements lors de cette première campagne : "+unc.join(" ; ")+". "+TBC, true);
-  const horsAcc = S.agents.filter(a=>!(a.accP==="X"&&a.accA==="X"));
-  if(horsAcc.length) add("ag","ag.hors","Pour les agents chimiques suivants, aucune méthode de prélèvement et d’analyse sous accréditation n’est disponible : une méthode générique, la sous-traitance ou un développement spécifique sera mis en œuvre ("+TBC+").", true, horsAcc.map(a=>a.agent));
-  const notRet = S.cand.filter(c=>(c.v8||c.vct) && !candState(c) && !c.emis).map(c=>c.nom);
+  /* GEH sans prélèvement : seulement quand le plan est renseigné */
+  if(hasPlan){ const covered = new Set(); infos.forEach(I=>I.gehs.forEach(id=>covered.add(id)));
+    const unc = gl.filter(g=>!covered.has(g.id) && !rows.some(r=>r.gehId===g.id)).map(g=>GN[g.id]);
+    if(unc.length) add("elim","elim.unc","Les GEH suivants ne font pas l’objet de prélèvements lors de cette première campagne : "+unc.join(" ; ")+". "+TBC, true); }
+  /* agents sans méthode accréditée (limités aux agents du plan quand il existe) */
+  const inPlan = a => !hasPlan || INFO.has(norm(a.agent));
+  const horsAcc = S.agents.filter(a=>!(a.accP==="X"&&a.accA==="X") && inPlan(a));
+  if(horsAcc.length) add("ag","ag.hors","Pour les agents chimiques suivants, aucune méthode de prélèvement et d’analyse sous accréditation n’est disponible : une méthode générique, la sous-traitance ou un développement spécifique sera mis en œuvre ("+TBC+").", true, horsAcc.map(a=>String(a.agent).split(" — ")[0]));
+  const notRet = (S.cand||[]).filter(c=>(c.v8||c.vct) && !candState(c) && !c.emis).map(c=>c.nom);
   if(notRet.length) add("ag","ag.nr","Certains paramètres n’ont pas été retenus compte tenu de l’absence de VLEP réglementaire applicable, de l’absence de méthode de référence ou de leur utilisation négligeable :", false, [...new Set(notRet)].slice(0,40));
   if(S.agents.some(a=>/inhalable|poussi/i.test(a.agent))) setOn("ag.A", true);
-  /* durée : prélèvements 8h sur plage courte -> pondération */
-  const short = {}; rows.forEach(r=>{ if(r.type!=="8h") return; if(!/^(15min|Entre 15min et 1h|Entre 1 et 4h)$/.test((r.plage||"").trim())) return; planAgents(r).forEach(a=>{ (short[a] = short[a]||new Set()).add(gn[r.gehId]||"?"); }); });
-  const sk = Object.keys(short); if(sk.length) add("duree","duree.pond","Pour les agents chimiques suivants, le prélèvement sera plus court que la durée du poste de travail. Le résultat des mesures sera ensuite pondéré sur 8h pour comparaison à la VLEP, en considérant une exposition nulle le reste du temps, l’opérateur étant affecté à d’autres tâches et n’étant plus exposé à cet agent chimique en dehors de la phase concernée :", true, sk.map(a=>a+" (GEH "+[...short[a]].join(", ")+")"));
-  /* nombre de mesures : opérations peu fréquentes */
+  /* ---- phrases par agent visé (une seule phrase par agent, GEH regroupés) ---- */
+  let nVlepct = 0, nDuree = 0;
+  infos.forEach(I=>{ const a = I.a, ref = agRef(I.name), Ref = agRef(I.name,true), ids = [...I.gehs], k = norm(I.name).replace(/ /g,"-").slice(0,40);
+    const types = I.rows.map(r=>norm(r.type)), ctPond = types.some(t=>/pond/.test(t)), isCT = types.some(t=>/^ct/.test(t)), is8h = types.some(t=>t==="8h");
+    const phases = new Set(I.tasks.map(t=>t.gid+"|"+norm(t.name))).size;
+    /* VLEP court terme : phase la plus exposante indéterminée si plusieurs phases */
+    if(isCT && (!a || a.vct)){ nVlepct++;
+      add("vlepct","vlepct.ag."+k,"La phase la plus exposante à l’agent chimique "+ref.txt+" n’ayant pas pu être déterminée pour "+gtxt(ids)+", nous avons choisi de réaliser les mesures court terme sur plusieurs phases distinctes lors de cette première campagne. Cela permet d’éviter de réaliser un nombre important de mesures lors de cette 1ère campagne. A contrario, il existe un risque que, à l’issue de l’évaluation initiale, le GEH soit non homogène pour cet agent chimique. Dans ce cas, nous devrons réétudier les GEH et réaliser des mesures complémentaires afin de pouvoir statuer réglementairement.", phases>=2, [], oneGeh(I)); }
+    /* durée : VLEP CT mesurée, 8h obtenue par pondération */
+    if(ctPond && (!a || (a.v8 && a.vct))){ nDuree++; const maxDay = Math.max(0, ...I.tasks.map(t=>t.day||0)), tn = jJoin([...new Set(I.tasks.map(t=>taskLbl(t.name)).filter(Boolean))]);
+      const head = Ref.txt+" "+(ref.pl?"disposent":"dispose")+" d’une VLEP court-terme et d’une VLEP 8h. ";
+      add("duree","duree.ag."+k, maxDay>1
+        ? head+"L’opération de "+(tn||TBC)+" est de courte durée, mais répétée "+maxDay+" fois par jour, ce qui justifie le contrôle de la VLEP 8h."
+        : head+"L’exposition à cet agent chimique n’est effective que pendant une courte durée (quelques minutes par jour) et l’opération correspondante n’est pas répétée dans la journée. Par conséquent, seule la VLEP court terme fera l’objet d’un prélèvement spécifique de 15 minutes. Le respect de la VLEP 8h sera vérifié par pondération à partir du résultat du contrôle de la VLEP court-terme, en considérant une exposition nulle le reste du temps.", true, [], oneGeh(I)); }
+    /* durée : prélèvement 8h plus long que l'exposition réelle -> pondération */
+    else if(is8h){ const shortTasks = I.tasks.length && I.tasks.every(t=>t.dur!=null && t.dur<=60), shortPlage = I.rows.some(r=>r.type==="8h" && J_SHORT_PLAGE.test((r.plage||"").trim()));
+      if(shortTasks || shortPlage){ nDuree++; const tn = jJoin([...new Set(I.tasks.map(t=>taskLbl(t.name)).filter(Boolean))]);
+        add("duree","duree.court."+k,"Pour "+ref.txt+", le prélèvement sera plus court que la durée du poste de travail. Le résultat des mesures sera ensuite pondéré sur 8h pour comparaison à la VLEP, en considérant une exposition nulle le reste du temps. "+(tn ? "Après avoir réalisé "+tn+", l’opérateur" : "L’opérateur")+" est en effet affecté à des tâches administratives dans un autre local et n’est plus exposé à cet agent chimique.", true, [], oneGeh(I)); } }
+    /* méthodes à durée de prélèvement limitée (migration sur le tube) */
+    const lim = /limiter le pr[ée]l[èe]vement [àa] (\d+)\s*h/i.exec((a&&a.commentaire)||"");
+    if(lim) add("infos","infos.lim."+k,"Pour "+ref.txt+", dont la durée du prélèvement doit être limitée pour éviter la migration de la première zone du tube vers la seconde zone, plusieurs prélèvements successifs de "+lim[1]+"h seront réalisés afin de couvrir la totalité du poste de travail.", true, [], oneGeh(I));
+  });
+  /* nombre de mesures : opérations peu fréquentes, par GEH (agents concernés seulement) */
   S.ateliers.forEach(at=>at.gehs.forEach(g=>{
-    const low = g.taches.filter(k=>{ const y = perYear(k.freq); return y!=null && y<=12 && (k.t||k.prod); }); if(!low.length) return;
-    const gr = rows.filter(r=>r.gehId===g.id); if(!gr.length) return;
-    const ags = new Set(); gr.forEach(r=>planAgents(r).forEach(a=>ags.add(a)));
-    const tn = [...new Set(low.map(k=>k.t).filter(Boolean))].join(" ; ") || "certaines opérations";
-    add("nb","nb."+g.id,"D’après les informations recueillies, l’opération de « "+tn+" » réalisée par le GEH "+gn[g.id]+" « "+(g.des||"")+" » a lieu moins de 12 fois par an. Lorsque le nombre de jours travaillés par an est faible, ainsi que le nombre de personnes dans le GEH, l’arrêté du 15/12/09 prévoit de réaliser des mesurages exhaustifs et de comparer les résultats des mesures directement aux VLEP sans interprétation statistique. Cela concerne les paramètres suivants :", true, [...ags], g.id);
-  }));
+    const low = []; taskGroups(g).forEach(gr=>gr.items.forEach(k=>{ const y = perYear(k.freq)!=null ? perYear(k.freq) : perYear(k.duree), yh = y!=null ? y : (()=>{ const h = gr.items[0], v = perYear(h.freq)!=null ? perYear(h.freq) : perYear(h.duree); return v; })(); if(yh!=null && yh<=12 && ((k.t||"").trim()||(k.prod||"").trim())) low.push({gr, k}); }));
+    if(!low.length) return; const mine = infos.filter(I=>I.gehs.has(g.id)); if(!mine.length) return;
+    const lowAg = mine.filter(I=>low.some(l=>prodMatch(l.k.prod, I.name))), ags = (lowAg.length ? lowAg : mine).map(I=>String(I.name).split(" — ")[0]);
+    const tn = [...new Set(low.map(l=>l.gr.name).filter(Boolean))].join(" ; ") || "certaines opérations";
+    add("nb","nb."+g.id,"D’après les informations recueillies, l’opération de « "+tn+" » réalisée par le GEH "+gn[g.id]+" « "+(g.des||"")+" » a lieu moins de 12 fois par an. Lorsque le nombre de jours travaillés par an est faible, ainsi que le nombre de personnes dans le GEH, l’arrêté du 15/12/09 prévoit de réaliser des mesurages exhaustifs et de comparer les résultats des mesures directement aux VLEP sans interprétation statistique. Cela concerne les paramètres suivants :", true, ags, g.id); }));
   /* regroupement GEH */
   S.ateliers.forEach(at=>at.gehs.forEach(g=>{ if((g.srcs||[]).length>1 && /\s\/\s/.test(g.des||"")) add("regr","regr."+g.id,"Les GEH « "+(g.des||"").split(" / ").join(" » et « ")+" » sont regroupés en un seul GEH : "+TBC+" (mêmes locaux, mêmes produits, mêmes conditions de travail).", true, [], g.id); }));
   /* éliminations saisies dans la matrice */
@@ -1687,7 +1776,15 @@ function genJust(){
   if(rows.some(r=>planAgents(r).length>1)) setOn("infos.A", true);
   if(rows.some(r=>r.type==="8h" && !/^(En journée|Plus de 4h)?$/.test((r.plage||"").trim()))) setOn("infos.B", true);
   if(S.ateliers.some(a=>a.gehs.some(g=>/^\s*1\s*(\(|$)/.test(g.eff||"")))) setOn("infos.C", true);
-  S.just = kept.concat(out); persist(); return out.length;
+  /* ---- anti-doublons ---- */
+  const specific = new Set(out.map(i=>i.sec));
+  const dropLib = it => (["vlepct.A","vlepct.B"].includes(it.key) && out.some(x=>x.sec==="vlepct")) || (["duree.A","duree.B"].includes(it.key) && out.some(x=>x.sec==="duree")) || (it.key==="infos.F" && out.some(x=>/^infos\.lim\./.test(x.key)));
+  const fp = (t,n) => norm(String(t||"").split(TBC).join(" ")).slice(0,n);
+  const keptSpec = new Set(kept.map(i=>fp(i.txt,120))), keptPref = new Set(kept.map(i=>fp(i.txt,60)));
+  const seen = new Set(), res = [];
+  out.forEach(it=>{ const e = fp(it.txt,400)+"|"+(it.list||[]).join(";"); if(keptSpec.has(fp(it.txt,120)) && !(it.list||[]).length) return; if(seen.has(e)) return; seen.add(e); res.push(it); });
+  libOut.forEach(it=>{ if(dropLib(it)) return; if(keptPref.has(fp(it.txt,60))) return; const e = fp(it.txt,400); if(seen.has(e)) return; seen.add(e); delete it.lib; res.push(it); });
+  S.just = kept.concat(res); persist(); return res.length;
 }
 let J_VIEW = "geh", J_ONLY = false, J_OPEN = {};
 const J_SEC_T = Object.fromEntries(J_SECS);

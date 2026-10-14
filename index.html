@@ -320,13 +320,11 @@ input:focus,textarea:focus,select:focus{border-color:var(--bleu)!important;box-s
       <label class="f">N° d'affaire<input data-k="affaire" autocomplete="off"></label>
       <label class="f">Visite / mission réalisée le<input type="date" data-k="dateMission"></label>
       <label class="f">Date d'édition du rapport<input type="date" data-k="dateEdition"></label>
-      <label class="f">Intervention sur site réalisée par<input data-k="intervenant" autocomplete="off"></label>
-      <label class="f">Rapport rédigé par<input data-k="redacteur" autocomplete="off"></label>
-      <label class="f">Rapport validé par<input data-k="valideur" autocomplete="off"></label>
+      <label class="f">Rédacteur<input data-k="redacteur" autocomplete="off"></label>
       <label class="f">Accréditation n°<input data-k="accred" autocomplete="off"></label>
       <label class="f" style="grid-column:1/-1">Adresse de l'agence (page de garde)<textarea data-k="agence" rows="4"></textarea></label>
     </div>
-    <div class="legend">Rédacteur, valideur, agence et n° d'accréditation sont mémorisés pour les prochains projets.</div>
+    <div class="legend">Rédacteur, agence et n° d'accréditation sont mémorisés pour les prochains projets.</div>
   </div>
   <div class="card">
     <h2>Notes de visite</h2>
@@ -801,7 +799,7 @@ const missionDate = () => { const s = String((S.ent&&S.ent.dateMission)||"").tri
 function pDate(v){ v = String(v==null?"":v).trim(); if(!v || v==="-") return null; let m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(v); if(m) return new Date(+m[3],+m[2]-1,+m[1]); m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v); if(m) return new Date(+m[1],+m[2]-1,+m[3]);
   if(/^\d{5}(\.\d+)?$/.test(v)){ const d = new Date(Date.UTC(1899,11,30)+Math.floor(+v)*864e5); return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()); } return null; }
 const fmtD = d => d ? String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear() : "";
-const EXWHY = {"fin-zone":"zone en fin d'activité", "fin-tache":"tâche en fin d'activité", "fin-prod":"produit en fin d'utilisation", "fin-agent":"agent en fin de présence", "sans-expo":"sans exposition (aucun agent à VLEP/CMR, ou tâche sans produit)"};
+const EXWHY = {"fin-zone":"zone en fin d'activité", "fin-tache":"tâche en fin d'activité", "fin-prod":"produit en fin d'utilisation", "fin-agent":"agent en fin de présence", "sans-expo":"sans exposition (aucun agent à VLEP/CMR, ou tâche sans produit)", "sans-compo":"composition inconnue (aucun agent à étudier identifié)"};
 const DUST_RE = /poussi|farine|c[ée]r[ée]ales|sucre|cacao|lait en poudre/i;
 /* équivalences : substance / composé du Seirich -> agent(s) de la base qui n'ont pas le même CAS (mélange d'isomères, famille de composés, base sans CAS) */
 const CR6 = ["7778-50-9","7789-00-6","1333-82-0","7775-11-3","10588-01-9","7789-12-0","13530-68-2"], HG2 = ["7783-35-9","592-85-8","7487-94-7","21908-53-2","10045-94-0"];
@@ -903,7 +901,7 @@ function parseSeirich(sh, dM){
     const lab = usage || nom, agList = [...new Set(sb.map(x=>x.nom.toLowerCase()))];
     const it = {prod: lab + (agList.length ? "\n"+agList.join(", ") : ""), duree: capFirst(PT.get(r,"Temps d'exposition par inhalation")), freq: normFreq(PT.get(r,"Fréquence d'exposition")), qj: qFmt(PT.get(r,"Valeur",0), PT.get(r,"Unité",0), "/j"), qa: qaOf(nom, usage, t), ck: sb.map(csKey)};
     let ex = t.ended; if(!ex){ const pe = prodEnd(nom, usage, t); if(pe) ex = {why:"fin-prod", d:pe}; }
-    if(!ex && all && !sb.length) ex = {why:"sans-expo"};   /* composition connue, aucun agent à VLEP/CMR */
+    if(!ex && !sb.length) ex = {why: all ? "sans-expo" : "sans-compo"};   /* aucun agent à VLEP/CMR : composition connue (sans-expo) ou inconnue de Seirich (sans-compo) */
     if(ex){ it.ex = ex; it.cs = sb.map(x=>{ const k = csKey(x); csd[k] = x; return k; }); t.excl.push(it); }
     else { sb.forEach(x=>addCand(x, lab, t.poste)); t.items.push(it); }
   });
@@ -911,7 +909,7 @@ function parseSeirich(sh, dM){
   if(AT) AT.rows.forEach(r=>{
     const nom = AT.get(r,"Nom de l'agent chimique émis"), tn = AT.get(r,"Nom de la tâche"), zp = AT.get(r,"Zones parentes");
     const t = find(tn, zp); if(!t){ orphan++; return; }
-    const it = {prod: nom, duree: capFirst(AT.get(r,"Temps d'exposition par inhalation")), freq: normFreq(AT.get(r,"Fréquence d'exposition"))};
+    const it = {prod: nom, em:1, duree: capFirst(AT.get(r,"Temps d'exposition par inhalation")), freq: normFreq(AT.get(r,"Fréquence d'exposition"))};
     let ex = t.ended; if(!ex){ const ae = endOf(az.get(norm(nom)), t); if(ae) ex = {why:"fin-agent", d:ae}; }
     if(ex){ const k = "e:"+norm(nom); csd[k] = {emis:true, nom}; it.ex = ex; it.cs = [k]; t.excl.push(it); }
     else { const k = "emis:"+norm(nom); const c = cand[k] = cand[k] || {cas:"", nom, v8:"", vct:"", nat:"", cmr:"", emis:true, prods:[], gehs:[]}; if(!c.gehs.includes(t.poste)) c.gehs.push(t.poste); t.items.push(it); }
@@ -923,11 +921,11 @@ function parseSeirich(sh, dM){
     const pk = t.atelier+"||"+t.poste; let g = postes[pk];
     if(!g){ g = postes[pk] = {id:uid(), des:t.poste, eff:"", orga:"", epc:(epcOf[t.poste.trim()]||[]).join(", "), epi:"", com:"", taches:[], exclus:[], agents:[], srcs:[t.poste]}; a.gehs.push(g); }
     if(!t.items.length && !t.excl.length) t.excl.push({prod:"", duree:"", freq:"", ex: t.ended || {why:"sans-expo"}, cs:[]});   /* tâche sans aucun produit */
-    t.items.forEach(it=>g.taches.push({id:uid(), t:t.nom, duree:it.duree, freq:it.freq, prod:it.prod, qj:it.qj||"", qa:it.qa||"", ck:it.ck||[]}));
-    t.excl.forEach(it=>g.exclus.push({id:uid(), t:t.nom, duree:it.duree, freq:it.freq, prod:it.prod, why:it.ex.why, date:fmtD(it.ex.d), cs:it.cs||[], qj:it.qj||"", qa:it.qa||""}));
+    t.items.forEach(it=>g.taches.push({id:uid(), t:t.nom, duree:it.duree, freq:it.freq, prod:it.prod, em:it.em||0, qj:it.qj||"", qa:it.qa||"", ck:it.ck||[]}));
+    t.excl.forEach(it=>g.exclus.push({id:uid(), t:t.nom, duree:it.duree, freq:it.freq, prod:it.prod, em:it.em||0, why:it.ex.why, date:fmtD(it.ex.d), cs:it.cs||[], qj:it.qj||"", qa:it.qa||""}));
   });
   /* index pour retrouver les mêmes lignes dans un projet déjà commencé */
-  const keptIdx = new Set(), exIdx = new Map(), qIdx = new Map(), st = {total:0, "fin-zone":0, "fin-tache":0, "fin-prod":0, "fin-agent":0, "sans-expo":0};
+  const keptIdx = new Set(), exIdx = new Map(), qIdx = new Map(), st = {total:0, "fin-zone":0, "fin-tache":0, "fin-prod":0, "fin-agent":0, "sans-expo":0, "sans-compo":0};
   ateliers.forEach(a=>a.gehs.forEach(g=>{ const pk = norm(g.srcs[0]);
     g.taches.forEach(k=>{ const id = pk+"|"+norm(k.t)+"|"+lineOf(k.prod); keptIdx.add(id); if(k.qj||k.qa||(k.ck&&k.ck.length)) qIdx.set(id, {qj:k.qj, qa:k.qa, ck:k.ck}); });
     g.exclus.forEach(x=>{ st.total++; st[x.why]++; const id = pk+"|"+norm(x.t)+"|"+lineOf(x.prod); if(!exIdx.has(id)) exIdx.set(id, {why:x.why, date:x.date, cs:x.cs}); }); }));
@@ -960,7 +958,7 @@ reg("fSeirich", async e=>{
 /* ---- éléments exclus (fin d'activité / d'utilisation, sans exposition) ---- */
 function exclMsg(R){
   const st = R.stats; if(!st || !st.total) return "";
-  const p = []; if(st["fin-zone"]) p.push(st["fin-zone"]+" : zone en fin d'activité"); if(st["fin-tache"]) p.push(st["fin-tache"]+" : tâche en fin d'activité"); if(st["fin-prod"]) p.push(st["fin-prod"]+" : produit en fin d'utilisation"); if(st["fin-agent"]) p.push(st["fin-agent"]+" : agent en fin de présence"); if(st["sans-expo"]) p.push(st["sans-expo"]+" : sans exposition (aucun agent à VLEP/CMR, ou tâche sans produit)");
+  const p = []; if(st["fin-zone"]) p.push(st["fin-zone"]+" : zone en fin d'activité"); if(st["fin-tache"]) p.push(st["fin-tache"]+" : tâche en fin d'activité"); if(st["fin-prod"]) p.push(st["fin-prod"]+" : produit en fin d'utilisation"); if(st["fin-agent"]) p.push(st["fin-agent"]+" : agent en fin de présence"); if(st["sans-expo"]) p.push(st["sans-expo"]+" : sans exposition (aucun agent à VLEP/CMR, ou tâche sans produit)"); if(st["sans-compo"]) p.push(st["sans-compo"]+" : composition inconnue (aucun agent à étudier identifié)");
   return '<div class="warn" style="margin-top:6px"><b>'+st.total+' ligne(s) exclue(s)</b> à la date de référence du '+fmtD(R.dM)+' (date de mission) : '+p.join(" · ")+'.'+((R.archGeh||[]).length ? '<br><b>'+R.archGeh.length+' GEH écarté(s)</b> (plus aucune ligne active) : '+esc(R.archGeh.map(o=>o.geh.des).join(" ; "))+'.' : '')+'<br>Rien n\'est perdu : encart « Éléments exclus » ci-dessous, bouton Réintégrer.</div>';
 }
 function candAddRec(rec, prod, geh){
@@ -982,7 +980,7 @@ function applyExcl(R){
   /* quantités (consommation quotidienne / annuelle) lues dans le Seirich, sur toutes les lignes du projet */
   if(R.qIdx) S.ateliers.forEach(a=>a.gehs.forEach(g=>{ const keys = gehKeys(g).map(norm); g.taches.forEach(k=>{ for(const pk of keys){ const q = R.qIdx.get(pk+"|"+norm(k.t)+"|"+lineOf(k.prod)); if(q){ k.qj = q.qj||""; k.qa = q.qa||""; k.ck = (q.ck||[]).slice(); break; } } }); }));
   const pl = planExcl(R), ids = new Map();
-  pl.forEach(({g,k,ex})=>{ g.exclus = g.exclus||[]; g.exclus.push({id:k.id, t:k.t, duree:k.duree||"", freq:k.freq||"", prod:k.prod||"", why:ex.why, date:ex.date||"", cs:ex.cs||[], qj:k.qj||"", qa:k.qa||""}); if(!ids.has(g)) ids.set(g,new Set()); ids.get(g).add(k.id); });
+  pl.forEach(({g,k,ex})=>{ g.exclus = g.exclus||[]; g.exclus.push({id:k.id, t:k.t, duree:k.duree||"", freq:k.freq||"", prod:k.prod||"", em:k.em||0, why:ex.why, date:ex.date||"", cs:ex.cs||[], qj:k.qj||"", qa:k.qa||""}); if(!ids.has(g)) ids.set(g,new Set()); ids.get(g).add(k.id); });
   ids.forEach((s,g)=>{ g.taches = g.taches.filter(k=>!s.has(k.id)); });
   S.csd = Object.assign(S.csd||{}, R.csd||{});
   const moved = new Set(), names = []; S.archGeh = S.archGeh||[];
@@ -1016,7 +1014,7 @@ function restoreGroup(gr){
   const i = (S.archGeh||[]).findIndex(o=>o.geh===g);
   if(i>=0){ const o = S.archGeh[i]; let a = S.ateliers.find(x=>norm(x.nom)===norm(o.atelier)); if(!a){ a = {id:uid(), nom:o.atelier, gehs:[]}; S.ateliers.push(a); } a.gehs.push(g); S.archGeh.splice(i,1); }
   const ids = new Set(gr.items.map(x=>x.id)); g.exclus = (g.exclus||[]).filter(x=>!ids.has(x.id));
-  gr.items.forEach(x=>{ g.taches.push({id:x.id, t:x.t, duree:x.duree||"", freq:x.freq||"", prod:x.prod||"", qj:x.qj||"", qa:x.qa||"", ck:(x.cs||[]).filter(c=>!/^e:/.test(c))}); (x.cs||[]).forEach(k=>{ const rec = (S.csd||{})[k]; if(rec) candAddRec(rec, String(x.prod||"").split("\n")[0], (g.srcs&&g.srcs[0])||g.des); }); });
+  gr.items.forEach(x=>{ g.taches.push({id:x.id, t:x.t, duree:x.duree||"", freq:x.freq||"", prod:x.prod||"", em:x.em||0, qj:x.qj||"", qa:x.qa||"", ck:(x.cs||[]).filter(c=>!/^e:/.test(c))}); (x.cs||[]).forEach(k=>{ const rec = (S.csd||{})[k]; if(rec) candAddRec(rec, String(x.prod||"").split("\n")[0], (g.srcs&&g.srcs[0])||g.des); }); });
 }
 (function(){
   const card = $("#exclCard"); if(!card) return;
@@ -1711,9 +1709,26 @@ function fillPlan(xml){
   if(ps>=0 && pre.indexOf("<w:tbl>",ps)<0){ const ptxt = textOf(pre.slice(ps)).trim(); if(/^Atelier\s*1$/i.test(ptxt)) pre = pre.slice(0,ps); }
   return pre + planTableXml() + xml.slice(e);
 }
+function mergedTasks(g){
+  const m = new Map(), add = (arr,v)=>{ v = String(v||"").trim(); if(v && !arr.some(y=>norm(y)===norm(v))) arr.push(v); };
+  (g.taches||[]).forEach(k=>{ const key = norm(k.t||""); let x = m.get(key); if(!x){ x = {t:k.t||"", dur:[], frq:[], prods:[], ags:[], pa:new Map(), multi:new Set()}; m.set(key,x); }
+    add(x.dur,k.duree); add(x.frq,k.freq);
+    const L = String(k.prod||"").split("\n").map(z=>z.trim()).filter(Boolean);
+    if(k.em) L.forEach(l=>add(x.ags,l)); else { if(L[0]) add(x.prods,L[0]); L.slice(1).forEach(l=>l.split(/,\s+/).forEach(a=>{ add(x.ags,a); const na = norm(a); if(!x.pa.has(na)) x.pa.set(na,new Set()); x.pa.get(na).add(norm(L[0]||"")); })); } });
+  m.forEach(x=>x.pa.forEach((ps,na)=>{ if(ps.size>1) x.multi.add(na); }));
+  return [...m.values()];
+}
+const PROD_MAX = 6;
+/* cellule « produits / ACD » : produits en normal (résumés au-delà de PROD_MAX), ACD une seule fois en gras */
+function taskCellLines(k){
+  const big = k.prods.length>PROD_MAX, out = [];
+  if(k.prods.length) out.push(big ? k.prods.length+" produits, dont : "+k.prods.slice(0,3).join(", ")+"… (liste complète dans l'Excel)" : k.prods.join(", "));
+  k.ags.forEach(a=>{ const n = k.pa && k.pa.get(norm(a)); out.push({t: a+(big && n && n.size>1 ? " ("+n.size+" produits)" : ""), b:true}); });
+  return out;
+}
 function gcell(w, lines, o){
   o = o||{}; const rpr = '<w:rPr><w:rFonts w:cs="Arial"/><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr>';
-  const runs = lines.map((t,i)=>'<w:r>'+rpr+(i?'<w:br/>':'')+'<w:t xml:space="preserve">'+esc(t)+'</w:t></w:r>').join("");
+  const runs = lines.map((t,i)=>{ const b = t && typeof t==='object' && t.b, it = t && typeof t==='object' && t.i, tx = (t && typeof t==='object') ? t.t : t, rp = rpr.replace('<w:sz ',(b?'<w:b/><w:bCs/>':'')+(it?'<w:i/><w:iCs/>':'')+'<w:sz '); return '<w:r>'+rp+(i?'<w:br/>':'')+'<w:t xml:space="preserve">'+esc(tx)+'</w:t></w:r>'; }).join("");
   return '<w:tc><w:tcPr><w:tcW w:w="'+w+'" w:type="dxa"/>'+(o.vm==="restart"?'<w:vMerge w:val="restart"/>':(o.vm==="cont"?'<w:vMerge/>':''))+BORD+'<w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="'+(o.left?"left":"center")+'"/>'+rpr+'</w:pPr>'+runs+'</w:p></w:tc>';
 }
 function fillGeh(xml){
@@ -1723,8 +1738,10 @@ function fillGeh(xml){
   const gt = tbls.filter(([a,b])=>textOf(xml.slice(a,b)).indexOf("Désignation du GEH")>=0);
   if(!gt.length) return xml;
   const t0 = xml.slice(gt[0][0], gt[0][1]);
-  const head = t0.match(/<w:tblPr>[\s\S]*?<\/w:tblGrid>/)[0], rs = rows_of(t0); if(!rs.length) return xml;
+  let head = t0.match(/<w:tblPr>[\s\S]*?<\/w:tblGrid>/)[0]; const rs = rows_of(t0); if(!rs.length) return xml;
   const W = [...head.matchAll(/<w:gridCol w:w="(\d+)"/g)].map(m=>+m[1]);
+  /* colonne « produits / ACD » élargie au détriment de la colonne « tâches » pour une lecture plus compacte */
+  if(W.length>8){ const mv = Math.round(W[4]*0.4); W[4] -= mv; W[7] += mv; let gi = 0; head = head.replace(/<w:gridCol w:w="\d+"/g, ()=>'<w:gridCol w:w="'+W[gi++]+'"'); }
   /* début = paragraphe d'étiquette juste avant le 1er tableau */
   const pre = xml.slice(0, gt[0][0]); const ps = Math.max(pre.lastIndexOf("<w:p "), pre.lastIndexOf("<w:p>"));
   const start = (ps>=0 && textOf(pre.slice(ps)).trim()) ? ps : gt[0][0];
@@ -1732,18 +1749,18 @@ function fillGeh(xml){
   let n = 0, out = "";
   S.ateliers.forEach((a,ai)=>{
     out += '<w:p><w:pPr><w:keepNext/><w:spacing w:before="120" w:after="120"/><w:rPr><w:b/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr><w:t xml:space="preserve">'+esc((ai+1)+" – "+(a.nom||""))+'</w:t></w:r></w:p>';
-    let t = '<w:tbl>'+head+rs[0][0];
     a.gehs.forEach(g=>{
-      n++; const L = g.taches.length ? g.taches : [{t:"",duree:"",freq:"",prod:""}];
+      let t = '<w:tbl>'+head+rs[0][0];
+      n++; const L = g.taches.length ? mergedTasks(g) : [{t:"",dur:[],frq:[],prods:[],ags:[]}];
       L.forEach((k,i)=>{
         const vm = i===0 ? "restart" : "cont", first = i===0;
-        t += '<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="298"/></w:trPr>'+
+        t += '<w:tr><w:trPr><w:trHeight w:val="298"/></w:trPr>'+
           gcell(W[0], first?[String(n)]:[], {vm})+gcell(W[1], first?[g.des||""]:[], {vm})+gcell(W[2], first?[g.eff||""]:[], {vm})+gcell(W[3], first?[g.orga||""]:[], {vm})+
-          gcell(W[4], [k.t||""], {left:true})+gcell(W[5], [k.duree||""])+gcell(W[6], [k.freq||""])+gcell(W[7], String(k.prod||"").split("\n").filter(x=>x!==""), {left:true})+
+          gcell(W[4], [k.t||""], {left:true})+gcell(W[5], [k.dur.join(" / ")])+gcell(W[6], [k.frq.join(" / ")])+gcell(W[7], taskCellLines(k), {left:true})+
           gcell(W[8], first?[g.epc||""]:[], {vm})+gcell(W[9], first?[g.epi||""]:[], {vm})+gcell(W[10], first?[g.com||""]:[], {vm})+'</w:tr>';
       });
+      out += t + '</w:tbl><w:p><w:pPr><w:spacing w:before="0" w:after="160"/><w:rPr><w:sz w:val="8"/></w:rPr></w:pPr></w:p>';
     });
-    out += t + '</w:tbl>';
   });
   return xml.slice(0,start) + out + xml.slice(end);
 }
@@ -1766,6 +1783,9 @@ function fillCover(xml){
     /* segment 3 : n° d'affaire, mission, agence, accréditation */
     let a = posOfText(xml, "affaire"), b = posOfText(xml, "Liste des sites");
     if(a>=0 && b>a){ xml = xml.slice(0,a) + fillFieldsSeq(xml.slice(a,b), [e.affaire, fmtDate(e.dateMission), e.agence, e.accred], [0,0,0,10]) + xml.slice(b); }
+    /* § Objectif : « contrat référencé » = n° d'affaire */
+    const ct = posOfText(xml, "contrat référencé");
+    if(ct>=0 && (e.affaire||"").trim()){ const ce = xml.indexOf("</w:p>", ct); xml = xml.slice(0,ct) + fillFieldsSeq(xml.slice(ct, ce>ct?ce:ct+3000), [e.affaire]) + xml.slice(ce>ct?ce:ct+3000); }
     /* date d'édition : cellule vide sous l'intitulé */
     const d = posOfText(xml, "dition du rapport");
     if(d>=0){
@@ -1775,7 +1795,7 @@ function fillCover(xml){
     }
     /* segment 2 : intervenant / rédacteur / valideur */
     a = posOfText(xml, "Intervention sur site"); b = posOfText(xml, "dition du rapport");
-    if(a>=0 && b>a){ xml = xml.slice(0,a) + fillFieldsSeq(xml.slice(a,b), [e.intervenant, e.redacteur, e.valideur]) + xml.slice(b); }
+    if(a>=0 && b>a){ xml = xml.slice(0,a) + fillFieldsSeq(xml.slice(a,b), ["\u200b", e.redacteur, "\u200b"]) + xml.slice(b); }
     /* segment 1 : destinataire */
     b = posOfText(xml, "CONTROLE REGLEMENTAIRE");
     if(b>0){ let s = xml.slice(0,b);
@@ -1928,27 +1948,35 @@ function genJust(){
   if(notRet.length) add("ag","ag.nr","Certains paramètres n’ont pas été retenus compte tenu de l’absence de VLEP réglementaire applicable, de l’absence de méthode de référence ou de leur utilisation négligeable :", false, [...new Set(notRet)].slice(0,40));
   if(S.agents.some(a=>/inhalable|poussi/i.test(a.agent))) setOn("ag.A", true);
   /* ---- phrases par agent visé (une seule phrase par agent, GEH regroupés) ---- */
-  let nVlepct = 0, nDuree = 0;
+  let nVlepct = 0, nDuree = 0; const VG = new Map(), DG = new Map();
   infos.forEach(I=>{ const a = I.a, ref = agRef(I.name), Ref = agRef(I.name,true), ids = [...I.gehs], k = norm(I.name).replace(/ /g,"-").slice(0,40);
     const types = I.rows.map(r=>norm(r.type)), ctPond = types.some(t=>/pond/.test(t)), isCT = types.some(t=>/^ct/.test(t)), is8h = types.some(t=>t==="8h");
     const phases = new Set(I.tasks.map(t=>t.gid+"|"+norm(t.name))).size;
     /* VLEP court terme : phase la plus exposante indéterminée si plusieurs phases */
     if(isCT && (!a || a.vct)){ nVlepct++;
-      add("vlepct","vlepct.ag."+k,"La phase la plus exposante à l’agent chimique "+ref.txt+" n’ayant pas pu être déterminée pour "+gtxt(ids)+", nous avons choisi de réaliser les mesures court terme sur plusieurs phases distinctes lors de cette première campagne. Cela permet d’éviter de réaliser un nombre important de mesures lors de cette 1ère campagne. A contrario, il existe un risque que, à l’issue de l’évaluation initiale, le GEH soit non homogène pour cet agent chimique. Dans ce cas, nous devrons réétudier les GEH et réaliser des mesures complémentaires afin de pouvoir statuer réglementairement.", phases>=2, [], oneGeh(I)); }
+      { const gk = ids.slice().sort().join(","); if(!VG.has(gk)) VG.set(gk,{ids, list:[], ph:false, geh:oneGeh(I)}); const G = VG.get(gk); G.list.push({k, ref, a, I}); if(phases>=2) G.ph = true; } }
     /* durée : VLEP CT mesurée, 8h obtenue par pondération */
     if(ctPond && (!a || (a.v8 && a.vct))){ nDuree++; const maxDay = Math.max(0, ...I.tasks.map(t=>t.day||0)), tn = jJoin([...new Set(I.tasks.map(t=>taskLbl(t.name)).filter(Boolean))]);
-      const head = Ref.txt+" "+(ref.pl?"disposent":"dispose")+" d’une VLEP court-terme et d’une VLEP 8h. ";
-      add("duree","duree.ag."+k, maxDay>1
-        ? head+"L’opération de "+(tn||TBC)+" est de courte durée, mais répétée "+maxDay+" fois par jour, ce qui justifie le contrôle de la VLEP 8h."
-        : head+"L’exposition à cet agent chimique n’est effective que pendant une courte durée (quelques minutes par jour) et l’opération correspondante n’est pas répétée dans la journée. Par conséquent, seule la VLEP court terme fera l’objet d’un prélèvement spécifique de 15 minutes. Le respect de la VLEP 8h sera vérifié par pondération à partir du résultat du contrôle de la VLEP court-terme, en considérant une exposition nulle le reste du temps.", true, [], oneGeh(I)); }
+      { const gk = "ag|"+ids.slice().sort().join(",")+"|"+maxDay+"|"+tn; if(!DG.has(gk)) DG.set(gk,{kind:"ag", ids, maxDay, tn, list:[], geh:oneGeh(I)}); DG.get(gk).list.push({k, ref, Ref, I}); } }
     /* durée : prélèvement 8h plus long que l'exposition réelle -> pondération */
     else if(is8h){ const shortTasks = I.tasks.length && I.tasks.every(t=>t.dur!=null && t.dur<=60), shortPlage = I.rows.some(r=>r.type==="8h" && J_SHORT_PLAGE.test((r.plage||"").trim()));
       if(shortTasks || shortPlage){ nDuree++; const tn = jJoin([...new Set(I.tasks.map(t=>taskLbl(t.name)).filter(Boolean))]);
-        add("duree","duree.court."+k,"Pour "+ref.txt+", le prélèvement sera plus court que la durée du poste de travail. Le résultat des mesures sera ensuite pondéré sur 8h pour comparaison à la VLEP, en considérant une exposition nulle le reste du temps. "+(tn ? "Après avoir réalisé "+tn+", l’opérateur" : "L’opérateur")+" est en effet affecté à des tâches administratives dans un autre local et n’est plus exposé à cet agent chimique.", true, [], oneGeh(I)); } }
+        { const gk = "court|"+ids.slice().sort().join(",")+"|"+tn; if(!DG.has(gk)) DG.set(gk,{kind:"court", ids, tn, list:[], geh:oneGeh(I)}); DG.get(gk).list.push({k, ref, I}); } } }
     /* méthodes à durée de prélèvement limitée (migration sur le tube) */
     const lim = /limiter le pr[ée]l[èe]vement [àa] (\d+)\s*h/i.exec((a&&a.commentaire)||"");
-    if(lim) add("infos","infos.lim."+k,"Pour "+ref.txt+", dont la durée du prélèvement doit être limitée pour éviter la migration de la première zone du tube vers la seconde zone, plusieurs prélèvements successifs de "+lim[1]+"h seront réalisés afin de couvrir la totalité du poste de travail.", true, [], oneGeh(I));
+    if(lim){ const gk = "lim|"+ids.slice().sort().join(",")+"|"+lim[1]; if(!DG.has(gk)) DG.set(gk,{kind:"lim", ids, h:lim[1], list:[], geh:oneGeh(I)}); DG.get(gk).list.push({k, ref, I}); }
   });
+  /* VLEP court terme : une seule phrase par groupe d'agents partageant les mêmes GEH */
+  VG.forEach(G=>{ const one = G.list.length===1, refs = jJoin(G.list.map(x=>x.ref.txt)), key = one ? "vlepct.ag."+G.list[0].k : "vlepct.grp."+G.list.map(x=>x.k).join("+").slice(0,80);
+    add("vlepct", key, "La phase la plus exposante "+(one?"à l’agent chimique ":"aux agents chimiques ")+refs+" n’ayant pas pu être déterminée pour "+gtxt(G.ids)+", nous avons choisi de réaliser les mesures court terme sur plusieurs phases distinctes lors de cette première campagne. Cela permet d’éviter de réaliser un nombre important de mesures lors de cette 1ère campagne. A contrario, il existe un risque que, à l’issue de l’évaluation initiale, "+(G.ids.length>1?"les GEH soient non homogènes":"le GEH soit non homogène")+" pour "+(one?"cet agent chimique":"ces agents chimiques")+". Dans ce cas, nous devrons réétudier les GEH et réaliser des mesures complémentaires afin de pouvoir statuer réglementairement.", G.ph, [], G.geh); });
+  /* durée / durée limitée : une phrase par groupe d'agents ayant le même contexte */
+  DG.forEach(G=>{ const n = G.list.length, one = n===1, pl = !one || G.list[0].ref.pl, refs = jJoin(G.list.map(x=>x.ref.txt)), key = "duree."+G.kind+"."+(one ? G.list[0].k : "grp."+G.list.map(x=>x.k).join("+").slice(0,80));
+    if(G.kind==="ag"){ const head = (one ? G.list[0].Ref.txt : refs.charAt(0).toUpperCase()+refs.slice(1))+" "+(pl?"disposent":"dispose")+" d’une VLEP court-terme et d’une VLEP 8h. ";
+      add("duree", key, G.maxDay>1
+        ? head+"L’opération de "+(G.tn||TBC)+" est de courte durée, mais répétée "+G.maxDay+" fois par jour, ce qui justifie le contrôle de la VLEP 8h."
+        : head+"L’exposition "+(one?"à cet agent chimique":"à ces agents chimiques")+" n’est effective que pendant une courte durée (quelques minutes par jour) et l’opération correspondante n’est pas répétée dans la journée. Par conséquent, seule la VLEP court terme fera l’objet d’un prélèvement spécifique de 15 minutes. Le respect de la VLEP 8h sera vérifié par pondération à partir du résultat du contrôle de la VLEP court-terme, en considérant une exposition nulle le reste du temps.", true, [], G.geh); }
+    else if(G.kind==="court"){ add("duree", key, "Pour "+refs+", le prélèvement sera plus court que la durée du poste de travail. Le résultat des mesures sera ensuite pondéré sur 8h pour comparaison à la VLEP, en considérant une exposition nulle le reste du temps. "+(G.tn ? "Après avoir réalisé "+G.tn+", l’opérateur" : "L’opérateur")+" est en effet affecté à des tâches administratives dans un autre local et n’est plus exposé "+(one?"à cet agent chimique":"à ces agents chimiques")+".", true, [], G.geh); }
+    else { add("infos", key, "Pour "+refs+", dont la durée du prélèvement doit être limitée pour éviter la migration de la première zone du tube vers la seconde zone, plusieurs prélèvements successifs de "+G.h+"h seront réalisés afin de couvrir la totalité du poste de travail.", true, [], G.geh); } });
   /* nombre de mesures : opérations peu fréquentes, par GEH (agents concernés seulement) */
   S.ateliers.forEach(at=>at.gehs.forEach(g=>{
     const low = []; taskGroups(g).forEach(gr=>gr.items.forEach(k=>{ const y = perYear(k.freq)!=null ? perYear(k.freq) : perYear(k.duree), yh = y!=null ? y : (()=>{ const h = gr.items[0], v = perYear(h.freq)!=null ? perYear(h.freq) : perYear(h.duree); return v; })(); if(yh!=null && yh<=12 && ((k.t||"").trim()||(k.prod||"").trim())) low.push({gr, k}); }));
@@ -2443,9 +2471,9 @@ async function buildXlsx(){
   const s5 = sheetXml(["Jour","Agents chimiques","N° GEH","Nb total de prélèvements","Type de VLEP","Plage horaire de prélèvement"], pd, [14,55,32,14,12,40], (r,c)=> r.sec ? 3 : 2, {merges:pm, noFilter:true});
   /* Tâches (3.7) */
   const td = []; let gn2 = 0;
-  S.ateliers.forEach(a=>a.gehs.forEach(g=>{ gn2++; const L = g.taches.length ? g.taches : [{t:"",duree:"",freq:"",prod:""}];
-    L.forEach(k=>td.push([gn2, a.nom||"", g.des||"", g.eff||"", g.orga||"", k.t||"", k.duree||"", k.freq||"", String(k.prod||""), g.epc||"", g.epi||"", g.com||""])); }));
-  const s6 = sheetXml(["N° GEH","Atelier","Désignation du GEH","Effectif","Organisation du travail","Tâche élémentaire","Durée d'exposition","Fréquence d'exposition","Produits / agents chimiques","Environnement / EPC","EPI","Commentaire"], td, [8,24,30,10,22,40,22,16,44,24,24,30], (r,c)=>2);
+  S.ateliers.forEach(a=>a.gehs.forEach(g=>{ gn2++; const L = g.taches.length ? mergedTasks(g) : [{t:"",dur:[],frq:[],prods:[],ags:[]}];
+    L.forEach(k=>td.push([gn2, a.nom||"", g.des||"", g.eff||"", g.orga||"", k.t||"", k.dur.join(" / "), k.frq.join(" / "), k.prods.join(", "), k.ags.join("\n"), g.epc||"", g.epi||"", g.com||""])); }));
+  const s6 = sheetXml(["N° GEH","Atelier","Désignation du GEH","Effectif","Organisation du travail","Tâche élémentaire","Durée d'exposition","Fréquence d'exposition","Produits utilisés","Agents chimiques (ACD)","Environnement / EPC","EPI","Commentaire"], td, [8,24,30,10,22,40,22,16,44,34,24,24,30], (r,c)=>2);
   const z = new JSZip();
   z.file("[Content_Types].xml",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'+[1,2,3,4,5,6].map(i=>'<Override PartName="/xl/worksheets/sheet'+i+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join("")+'</Types>');
   z.file("_rels/.rels",'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');

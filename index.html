@@ -312,6 +312,9 @@ input:focus,textarea:focus,select:focus{border-color:var(--bleu)!important;box-s
       <label class="f" style="grid-column:1/-1">Devis / affaire lié<input data-k="devis" autocomplete="off"></label>
       <label class="f">CP – Ville<input data-k="cpville" autocomplete="off"></label>
       <label class="f">Activité<input data-k="activite" autocomplete="off"></label>
+      <label class="f">Évaluation des risques chimiques du client<select data-k="ercMode"><option value="">Auto (présente si import Seirich)</option><option value="present">Présente</option><option value="absent">Absente</option></select></label>
+      <label class="f">Référence de l'ERC<input data-k="ercRef" placeholder="ex : Seirich" autocomplete="off"></label>
+      <label class="f">Date de l'ERC<input type="date" data-k="ercDate"></label>
     </div>
   </div>
   <div class="card">
@@ -431,6 +434,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--bleu)!important;box-s
     <div class="card imp" style="margin-bottom:12px">
       <b>⚡ Préparer toute la stratégie automatiquement</b>
       <div class="legend" style="margin:4px 0 8px">Après un import : retient les agents à VLEP réglementaire ou CMR (dans la base ou hors base), écarte les GEH sans agent retenu, remplit la matrice, génère le plan et les justifications. Tout reste modifiable ensuite.</div>
+      <div class="row" style="margin:0 0 8px"><b style="font-size:13px">Terrain de cette intervention :</b><label>Pompes dispo <input type="number" data-cap="pumps" min="1" placeholder="à saisir" style="width:60px;padding:3px 6px"></label><label>Techniciens <input type="number" data-cap="techs" min="1" placeholder="à saisir" style="width:55px;padding:3px 6px"></label><label>8 h / jour / tech <input type="number" data-cap="h8" min="1" placeholder="à saisir" style="width:55px;padding:3px 6px"></label><label>CT / jour / tech <input type="number" data-cap="ct" min="1" placeholder="à saisir" style="width:55px;padding:3px 6px"></label></div>
       <div class="row" style="margin:0"><button class="btn pri" id="bAuto">Préparer la stratégie</button><span id="autoMsg" style="font-size:13px"></span></div>
     </div>
     <div class="legend" style="margin:0 0 10px">Ateliers puis GEH. Les numéros se suivent automatiquement sur tout le site et alimentent le plan d'échantillonnage.</div>
@@ -464,7 +468,10 @@ input:focus,textarea:focus,select:focus{border-color:var(--bleu)!important;box-s
       <label>Prélèvements par ligne <input type="number" id="gpNb" min="1" value="3" style="width:60px;padding:3px 6px"></label>
       <label><input type="checkbox" id="gpCT" checked> Ligne CT si VLEP CT réglementaire</label>
       <label><input type="checkbox" id="gpGrp" checked> Regrouper les agents au même support</label>
-      <select id="gpMode" style="padding:4px 6px;border:1px solid var(--bord);border-radius:6px"><option value="etale">Étalé sur 3 jours (J1 / J2 / J3)</option><option value="compact">Compact (un jour par ligne)</option></select>
+      <label>Pompes dispo <input type="number" id="capP" data-cap="pumps" min="1" placeholder="à saisir" style="width:60px;padding:3px 6px"></label>
+      <label>Techniciens <input type="number" id="capT" data-cap="techs" min="1" placeholder="à saisir" style="width:55px;padding:3px 6px"></label>
+      <label>8 h / jour / tech <input type="number" id="cap8" data-cap="h8" min="1" placeholder="à saisir" style="width:55px;padding:3px 6px"></label>
+      <label>CT / jour / tech <input type="number" id="capC" data-cap="ct" min="1" placeholder="à saisir" style="width:55px;padding:3px 6px"></label>
       <button class="btn pri" id="bGenPlan">Générer le plan</button>
     </div>
     <div id="gpMsg"></div>
@@ -475,7 +482,7 @@ input:focus,textarea:focus,select:focus{border-color:var(--bleu)!important;box-s
       <button class="btn pri sm" id="bRow">+ Ligne</button>
       <button class="btn sm" id="bSec">+ Section (Option, Postes fixes…)</button>
       <button class="btn sm" id="bCopyPlan" title="Copie le plan au format de l'annexe, à coller dans Excel / Word / devis">📋 Copier le plan (annexe)</button><label style="font-size:12px;color:var(--mut)"><input type="checkbox" id="cpTitle" checked> titre + phrase d'intro</label><span id="cpMsg" class="legend" style="margin:0"></span>
-      <label style="margin-left:auto;font-size:12px;color:var(--mut)">Seuil de charge par jour <input type="number" min="1" id="thr" class="mini" style="width:60px;padding:3px 6px"></label>
+      <input type="hidden" id="thr">
     </div>
     <div id="planWrap"></div>
     <div class="legend">Un jour par ligne ou plusieurs (« J1 / J2 / J3 » : le nombre de prélèvements est alors le total sur ces jours). Plusieurs agents sur une même ligne = prélèvements regroupés.</div>
@@ -689,8 +696,8 @@ $("#lst").addEventListener("click", e=>{ const b=e.target.closest("[data-add]");
 function sortedIdx(){
   return S.agents.map((a,i)=>i).sort((x,y)=>norm(S.agents[x].agent).localeCompare(norm(S.agents[y].agent),"fr"));
 }
-/* agent sans laboratoire (ni labo en base, ni offre au catalogue) : écarté de l'étude, sauf demande du client */
-function noLab(a){ if(!a || a.keepNoLab || a.labo) return false; try{ dvInit(); const o = dvOffers(a.cas||"", a.agent); return !o.list.length; }catch(e){ return false; } }
+/* agent sans laboratoire dans la base : écarté de l'étude, sauf demande du client (l'onglet Faisabilité reste disponible pour chercher une offre) */
+function noLab(a){ return !!a && !a.keepNoLab && !String(a.labo||"").trim(); }
 function isAcc(a){ return a.accP==="X" && a.accA==="X"; }
 function renderSel(){
   const n = S.agents.length, hors = S.agents.filter(a=>!isAcc(a)).length, cmr = S.agents.filter(a=>a.cmr).length;
@@ -884,7 +891,7 @@ function parseSeirich(sh, dM){
       const b8 = v8.findIndex(j=>g(j)!==""), bc = vct.findIndex(j=>g(j)!=="");
       const rec = {cas:SB.get(r,"Numéro CAS"), nom:SB.get(r,"Nom de la substance"),
         v8: b8>=0 ? numClean(g(v8[b8])) : "", vct: bc>=0 ? numClean(g(vct[bc])) : "",
-        nat: b8>=0 ? g(n8[b8]) : (bc>=0 ? g(nct[bc]) : ""), cmr:[...new Set(cm.map(g).filter(x=>/1[AB]/.test(x)))].join(", ")};
+        nat: b8>=0 ? g(n8[b8]) : (bc>=0 ? g(nct[bc]) : ""), nat8: b8>=0 ? g(n8[b8]) : "", natct: bc>=0 ? g(nct[bc]) : "", cmr:[...new Set(cm.map(g).filter(x=>/1[AB]/.test(x)))].join(", ")};
       if(rec.cas) subs[rec.cas] = rec; subsN[norm(rec.nom)] = rec;
     });
   }
@@ -897,7 +904,7 @@ function parseSeirich(sh, dM){
   }
   const addCand = (rec, prod, geh) => {
     if(!rec.v8 && !rec.vct && !rec.cmr) return;
-    const k = rec.cas || norm(rec.nom); const c = cand[k] = cand[k] || {cas:rec.cas, nom:rec.nom, v8:rec.v8, vct:rec.vct, nat:rec.nat, cmr:rec.cmr, prods:[], gehs:[]};
+    const k = rec.cas || norm(rec.nom); const c = cand[k] = cand[k] || {cas:rec.cas, nom:rec.nom, v8:rec.v8, vct:rec.vct, nat:rec.nat, nat8:rec.nat8||"", natct:rec.natct||"", cmr:rec.cmr, prods:[], gehs:[]};
     if(prod && !c.prods.includes(prod)) c.prods.push(prod); if(geh && !c.gehs.includes(geh)) c.gehs.push(geh);
   };
   /* produits dans tâches : une ligne est écartée si la zone/tâche/le produit est terminé, ou si le produit n'a aucun agent à VLEP/CMR */
@@ -1077,7 +1084,7 @@ reg("fFds", async e=>{
 /* ---- agents détectés ---- */
 function vNature(n){ n = norm(n); return n.includes("contraignante") ? "vContr" : (n.includes("reglementaire indicative") ? "vIndic" : (n ? "vAdm" : "")); }
 function candState(c){ return S.agents.some(a=>(c.cas && a.cas===c.cas) || (!c.cas && norm(a.agent)===norm(c.nom)) || c.refs.some(r=>a.ref===r)); }
-const candOK = c => { const f = $("#candF") ? $("#candF").value : "all"; if(f==="cmr") return !!c.cmr; if(f==="reg") return !!c.cmr || /contraignante|reglementaire indicative/.test(norm(c.nat)) || c.emis; return true; };
+const candOK = c => { const f = $("#candF") ? $("#candF").value : "all"; if(f==="cmr") return !!c.cmr; if(f==="reg") return !!c.cmr || /contraignante|indicative|admise/.test(norm(c.nat)) || c.emis; return true; };
 function renderCand(){
   $("#candCard").classList.toggle("hide", !S.cand.length);
   if(!S.cand.length) return;
@@ -1108,9 +1115,9 @@ function renderGeh(){
   const h = S.ateliers.map((a,ai)=>{
     const gs = a.gehs.map((g,gi)=>{ n++; const k = ai+'.'+gi;
       const sub = g.open ? '<div class="sub"><div class="g3"><label class="f">Environnement / EPC<input data-k2="'+k+'" data-f="epc" value="'+esc(g.epc)+'" placeholder="ex : ventilation générale, captage localisé"></label><label class="f">EPI<input data-k2="'+k+'" data-f="epi" value="'+esc(g.epi)+'" placeholder="ex : gants nitrile, demi-masque FFP2"></label><label class="f">Commentaire<input data-k2="'+k+'" data-f="com" value="'+esc(g.com)+'"></label></div>'+
-        '<table class="t"><thead><tr><th>Tâche élémentaire</th><th style="width:170px">Durée d\'exposition</th><th style="width:120px">Fréquence</th><th>Produits utilisés / agents chimiques</th><th style="width:130px">Quantité (Seirich)</th><th></th></tr></thead><tbody>'+
+        (g.detail ? '<table class="t"><thead><tr><th>Tâche élémentaire</th><th style="width:170px">Durée d\'exposition</th><th style="width:120px">Fréquence</th><th>Produits utilisés / agents chimiques</th><th style="width:130px">Quantité (Seirich)</th><th></th></tr></thead><tbody>'+
         g.taches.map((t,ti)=>'<tr><td class="l"><input data-k2="'+k+'" data-ti="'+ti+'" data-f="t" value="'+esc(t.t)+'"></td><td><input data-k2="'+k+'" data-ti="'+ti+'" data-f="duree" list="dl-duree" value="'+esc(t.duree)+'"></td><td><input data-k2="'+k+'" data-ti="'+ti+'" data-f="freq" list="dl-freq" value="'+esc(t.freq)+'"></td><td class="l"><textarea data-k2="'+k+'" data-ti="'+ti+'" data-f="prod">'+esc(t.prod)+'</textarea></td><td class="l" style="font-size:12px;color:var(--mut)">'+esc([t.qj,t.qa].filter(Boolean).join(" · "))+'</td><td class="act"><button class="btn sm" data-tdup="'+k+'.'+ti+'" title="Dupliquer">⧉</button> <button class="btn sm" data-tdel="'+k+'.'+ti+'" title="Supprimer">×</button></td></tr>').join("")+
-        '</tbody></table><div class="row"><button class="btn sm" data-tadd="'+k+'">+ Tâche</button></div></div>' : '';
+        '</tbody></table>' : groupedTable(g))+'<div class="row"><button class="btn sm" data-gdet="'+k+'">'+(g.detail?'Vue regroupée':'Modifier les lignes ('+g.taches.length+')')+'</button> <button class="btn sm" data-tadd="'+k+'">+ Tâche</button></div></div>' : '';
       return '<div class="geh"><div class="hd"><div class="num"><input type="checkbox" data-gsel="'+g.id+'"'+(selG.has(g.id)?' checked':'')+'>'+n+'</div><input data-k2="'+k+'" data-f="des" value="'+esc(g.des)+'" placeholder="Désignation du GEH"><input data-k2="'+k+'" data-f="eff" value="'+esc(g.eff)+'" placeholder="Effectif"><input data-k2="'+k+'" data-f="orga" value="'+esc(g.orga)+'" placeholder="Organisation (ex : 2 x 8h)"><div class="act"><button class="btn sm" data-gtog="'+k+'">'+(g.open?'▾':'▸')+' Tâches ('+g.taches.length+')'+((g.exclus||[]).length?' · '+g.exclus.length+' exclue(s)':'')+'</button> <button class="btn sm" data-gup="'+k+'" title="Monter">↑</button> <button class="btn sm" data-gdn="'+k+'" title="Descendre">↓</button> <button class="btn sm" data-gdel="'+k+'" title="Supprimer">×</button></div></div>'+agl(g)+sub+'</div>'; }).join("");
     return '<div class="at"><div class="row" style="margin:0 0 4px"><b>Atelier '+(ai+1)+' :</b><input class="s" data-ai="'+ai+'" data-f="nom" value="'+esc(a.nom)+'" placeholder="Nom de l\'atelier"><button class="btn sm" data-gadd="'+ai+'">+ GEH</button><button class="btn sm" data-adel="'+ai+'">Supprimer l\'atelier</button></div>'+gs+'</div>';
   }).join("");
@@ -1128,6 +1135,7 @@ $("#gehWrap").addEventListener("click", e=>{
   const b = e.target.closest("button"); if(!b) return; const d = b.dataset;
   if(d.gadd!=null) S.ateliers[+d.gadd].gehs.push({id:uid(),des:"",eff:"",orga:"",epc:"",epi:"",com:"",taches:[],agents:[],srcs:[],open:true});
   else if(d.adel!=null){ if(!confirm("Supprimer cet atelier et ses GEH ?")) return; S.ateliers.splice(+d.adel,1); }
+  else if(d.gdet!=null){ const [ai,gi] = gPos(d.gdet), g = S.ateliers[ai].gehs[gi]; g.detail = !g.detail; }
   else if(d.gtog!=null){ const [ai,gi] = gPos(d.gtog), g = S.ateliers[ai].gehs[gi]; g.open = !g.open; }
   else if(d.tadd!=null){ const [ai,gi] = gPos(d.tadd); S.ateliers[ai].gehs[gi].taches.push({id:uid(),t:"",duree:"",freq:"",prod:""}); }
   else if(d.tdel!=null){ const p = gPos(d.tdel); S.ateliers[p[0]].gehs[p[1]].taches.splice(p[2],1); }
@@ -1241,10 +1249,10 @@ function renderTerrain(){
     '<label>EPI portés</label>'+T_EPI.map(v=>chip(v, toks(g.epi).some(y=>norm(y)===norm(v)), 'data-chip="epi" data-v="'+esc(v)+'"')).join("")+'<input data-tf="epi" value="'+esc(g.epi)+'" placeholder="précisions (norme, type de cartouche…)">'+
     '<label>Commentaire / observation</label><textarea data-tf="com" rows="3" placeholder="variations de production, remarques…">'+esc(g.com)+'</textarea>'+
     '<div class="aglist" style="margin:10px 0 0">'+(agentsOfGeh(g).length ? '<b>Polluants rattachés :</b> '+esc(agentsOfGeh(g).map(agName).filter(Boolean).join(" ; ")) : 'Aucun polluant rattaché pour l\'instant.')+'</div></div>';
-  const tasks = g.taches.map((k,i)=>'<div class="tcard"><div class="row" style="margin:0"><b style="flex:1">'+esc(k.t||"(tâche sans nom)")+'</b><button class="btn sm" data-act="tedit" data-i="'+i+'">Modifier</button><button class="btn sm" data-act="tdup" data-i="'+i+'">⧉</button><button class="btn sm" data-act="tdel" data-i="'+i+'">×</button></div>'+
-    '<div class="m">'+esc([k.duree,k.freq].filter(Boolean).join(" · "))+'</div><div class="m">'+esc(k.prod||"")+'</div>'+((k.qj||k.qa)?'<div class="m">Quantité (Seirich) : '+esc([k.qj,k.qa].filter(Boolean).join(" · "))+'</div>':'')+'</div>').join("");
+  const MT = mergedTasks(g, true), tasks = MT.map(k=>'<div class="tcard"><div class="row" style="margin:0"><b style="flex:1">'+esc(k.t||"(tâche sans nom)")+(k.idx.length>1?' <small>('+k.idx.length+' lignes fusionnées)</small>':'')+'</b><button class="btn sm" data-act="tedit" data-i="'+k.idx[0]+'">Modifier</button><button class="btn sm" data-act="tdelg" data-ii="'+k.idx.join(",")+'">×</button></div>'+
+    '<div class="m">'+esc([k.dur.join(" / "),k.frq.join(" / ")].filter(Boolean).join(" · "))+'</div>'+cellHtml(k)+qHtml(k)+'</div>').join("");
   const sel = n => tf.ag.map(u=>{ const a = S.agents.find(z=>z.uid===u); return a ? chip("✕ "+a.agent, true, 'data-act="tunag" data-u="'+u+'"', "ag") : ""; }).join("");
-  $("#tBody").innerHTML = '<div class="card tf"><h2>Activités / tâches de ce GEH ('+g.taches.length+')</h2>'+(tasks||'<div class="legend">Aucune tâche saisie.</div>')+((g.exclus||[]).length?'<div class="legend">'+g.exclus.length+' ligne(s) masquée(s) (fin d\'activité ou sans exposition) : onglet 4, encart « Éléments exclus ».</div>':'')+
+  $("#tBody").innerHTML = '<div class="card tf"><h2>Activités / tâches de ce GEH ('+MT.length+')</h2>'+(tasks||'<div class="legend">Aucune tâche saisie.</div>')+((g.exclus||[]).length?'<div class="legend">'+g.exclus.length+' ligne(s) masquée(s) (fin d\'activité ou sans exposition) : onglet 4, encart « Éléments exclus ».</div>':'')+
     '<h2 style="margin-top:18px">'+(tf.edit!=null?'Modifier la tâche':'Ajouter une tâche')+'</h2>'+
     '<label>Tâche / activité</label><input data-tt="t" list="dl-taches" value="'+esc(tf.t)+'" placeholder="ex : Remplissage des cuves"><datalist id="dl-taches">'+[...new Set(T_TACHES.concat(allGeh().flatMap(o=>o.g.taches.map(k=>k.t))).filter(Boolean))].map(v=>'<option value="'+esc(v)+'">').join("")+'</datalist>'+
     '<label>Durée d\'exposition</label>'+T_DUREE.map(v=>chip(v, tf.duree===v, 'data-act="tdur" data-v="'+esc(v)+'"')).join("")+
@@ -1255,7 +1263,7 @@ function renderTerrain(){
     '<div class="row" style="margin-top:14px"><button class="btn pri big" data-act="tsave">'+(tf.edit!=null?'Enregistrer la modification':'+ Ajouter la tâche')+'</button>'+(tf.edit!=null?'<button class="btn big" data-act="tcancel">Annuler</button>':'')+'</div></div>';
   tCount();
 }
-function tCount(){ const nG = allGeh().length, nT = allGeh().reduce((n,o)=>n+o.g.taches.length,0); $("#tCount").textContent = nG+" GEH · "+nT+" tâche(s) · "+S.agents.length+" agent(s) retenu(s) · "+bkText(); }
+function tCount(){ const nG = allGeh().length, nT = allGeh().reduce((n,o)=>n+mergedTasks(o.g,true).length,0); $("#tCount").textContent = nG+" GEH · "+nT+" tâche(s) · "+S.agents.length+" agent(s) retenu(s) · "+bkText(); }
 const gMiss = g => ["eff","orga","epc","epi"].filter(k=>!String(g[k]||"").trim());
 function updTerrainSel(){ const l = allGeh(); const cur = curGeh(); const nOk = l.filter(o=>!gMiss(o.g).length).length;
   $("#tSel").innerHTML = l.map((o,i)=>'<option value="'+o.g.id+'"'+(cur&&cur.g.id===o.g.id?' selected':'')+'>'+(gMiss(o.g).length?'○ ':'✓ ')+(i+1)+' – '+esc(o.g.des||"(sans nom)")+' ['+esc(o.a.nom||"?")+']</option>').join("") || '<option>—</option>';
@@ -1279,7 +1287,7 @@ function renderCarnet(){
   h += '<div class="cgeh">'+all.map((o,i)=>chip((i+1)+" · "+(o.g.des||"sans nom"), x&&x.g.id===o.g.id, 'data-cg="'+o.g.id+'"')).join("")+'</div>';
   h += '<div class="row" style="margin:8px 0 0"><input id="cNewGeh" style="flex:1" placeholder="Nouveau GEH (ex : Opérateur peinture)" autocomplete="off"><button class="btn pri" data-cact="newgeh" type="button">+ GEH</button></div>';
   if(!x){ host.innerHTML = h+'<div class="empty" style="margin-top:10px">Aucun GEH : crée le premier ci-dessus.</div>'; return; }
-  const g = x.g, tasks = g.taches;
+  const g = x.g, tasks = mergedTasks(g, true).map(m=>({id:m.ids[0], ids:m.ids, t:m.t, duree:m.dur.join(" / "), freq:m.frq.join(" / ")}));
   h += '<div class="cbar"><b>GEH '+(all.findIndex(o=>o.g.id===g.id)+1)+' · '+esc(g.des||"sans nom")+'</b> <span class="tag">'+esc(x.a.nom||"atelier ?")+'</span></div>';
   h += '<div>'+C_TYPES.map(([k,l])=>chip(l, cType===k, 'data-ctype="'+k+'"')).join("")+'</div>';
   h += '<div class="row" style="margin:6px 0 0"><label style="font-size:12px;color:var(--mut)">Rattacher à&nbsp;<select id="cAtt"><option value="">le GEH entier</option>'+tasks.map(k=>'<option value="'+k.id+'"'+(cAtt===k.id?' selected':'')+'>Tâche : '+esc(k.t||"(sans nom)")+'</option>').join("")+'</select></label></div>';
@@ -1289,7 +1297,7 @@ function renderCarnet(){
   const notes = g.notes||[], by = tid => notes.filter(n=>(n.tid||"")===tid);
   const li = n => '<div class="cn"><span class="tag">'+esc(C_LAB[n.type]||n.type)+'</span><textarea data-cn="'+n.id+'" rows="1">'+esc(n.txt)+'</textarea><button class="btn sm" data-cdel="'+n.id+'" type="button" title="Supprimer">✕</button></div>';
   h += '<div class="clog"><h3>Notes du GEH ('+notes.length+')</h3>'+(by("").map(li).join("")||'<div class="legend">Aucune note sur le GEH.</div>');
-  tasks.forEach(k=>{ const l = by(k.id); if(l.length || true) h += '<div class="ctask"><b>'+esc(k.t||"(tâche sans nom)")+'</b>'+(k.duree||k.freq?' <small>'+esc([k.duree,k.freq].filter(Boolean).join(" · "))+'</small>':'')+(l.map(li).join("")||'')+'</div>'; });
+  tasks.forEach(k=>{ const l = k.ids.flatMap(by); if(l.length || true) h += '<div class="ctask"><b>'+esc(k.t||"(tâche sans nom)")+'</b>'+(k.duree||k.freq?' <small>'+esc([k.duree,k.freq].filter(Boolean).join(" · "))+'</small>':'')+(l.map(li).join("")||'')+'</div>'; });
   h += '</div><div class="row"><button class="btn sm" data-cact="copy" type="button">📋 Copier tout le carnet</button><span id="cCopy" class="legend" style="margin:0"></span></div>';
   host.innerHTML = h;
 }
@@ -1382,6 +1390,7 @@ $("#p-terrain").addEventListener("click", e=>{
   }
   else if(d.act==="tcancel"){ resetTf(); renderTerrain(); }
   else if(d.act==="tedit"){ const k = g.taches[+d.i]; tf = {t:k.t||"", duree:k.duree||"", freq:k.freq||"", prod: k.ag&&k.ag.length ? String(k.prod||"").split("\n")[0] : (k.prod||""), ag:(k.ag||[]).slice(), edit:+d.i, q:""}; renderTerrain(); window.scrollTo({top:document.body.scrollHeight,behavior:"smooth"}); }
+  else if(d.act==="tdelg"){ const set = new Set(d.ii.split(",").map(Number)); if(set.size>1 && !confirm("Supprimer cette tâche et ses "+set.size+" lignes fusionnées ?")) return; g.taches = g.taches.filter((_,i)=>!set.has(i)); persist(); renderTerrain(); }
   else if(d.act==="tdup"){ const k = JSON.parse(JSON.stringify(g.taches[+d.i])); k.id = uid(); g.taches.splice(+d.i+1,0,k); persist(); renderTerrain(); }
   else if(d.act==="tdel"){ g.taches.splice(+d.i,1); if(tf.edit!=null) resetTf(); persist(); renderTerrain(); }
 });
@@ -1399,30 +1408,49 @@ function matOpts(){ return {ct: $("#gpCT") ? $("#gpCT").checked : true, nb: Math
 function defState(a,o){ if(a.v8 || !a.vct) return (o.ct && a.vct && ["contr","indic"].includes(vtype(a))) ? "8h+CT" : "8h"; return "CT"; }
 function matCell(g,a,o,link){ const k = g.id+"|"+a.uid; if(S.mat[k]!=null) return S.mat[k]; return link[g.id] && link[g.id].has(a.uid) ? defState(a,o) : ""; }
 function linkMap(){ const link = {}; S.ateliers.forEach(at=>at.gehs.forEach(g=>{ link[g.id] = new Set(agentsOfGeh(g)); })); return link; }
+/* nature de la VLEP pour le type de mesure (8h / CT) : réglementaire (contraignante ou indicative) => triplé ; admise, CMR sans VLEP => 1 mesure */
+function isRegl(a, type){
+  const c = (S.cand||[]).find(x=>(x.cas && a.cas && x.cas===a.cas) || norm(x.nom)===norm(a.agent));
+  const nat = c ? (type==="CT" ? c.natct : c.nat8) : "";
+  if(nat) return /contraignante|indicative/.test(norm(nat));
+  return vtype(a)==="contr" || vtype(a)==="indic";
+}
+const CAPK = ["pumps","techs","h8","ct"];
+const capSet = () => CAPK.every(k=>parseInt((S.cap||{})[k])>0);
+const CAP = () => { const c = {}; CAPK.forEach(k=>{ c[k] = Math.max(1, parseInt((S.cap||{})[k])||1); }); return c; };
+const CAP_MSG = "Renseigne d’abord les paramètres de terrain de cette intervention : pompes disponibles, techniciens, nombre de 8 h et de CT par jour et par technicien.";
 function genPlan(o){
-  const thr = S.thr||8, rows = [], linked = new Set(), link = linkMap(); let nElim = 0;
+  const rows = [], linked = new Set(), link = linkMap(); let nElim = 0;
   S.ateliers.forEach(at=>at.gehs.forEach(g=>{
-    const nbG = parseInt(S.matNb[g.id]) || 0, nbOf = a => nbG || ((vtype(a)==="contr"||vtype(a)==="indic") ? o.nb : 1), cells = S.agents.filter(a=>!noLab(a)).map(a=>({a, s:matCell(g,a,o,link)})).filter(c=>c.s);
+    const nbG = parseInt(S.matNb[g.id]) || 0, nbOf = (a,type) => nbG || (isRegl(a,type) ? o.nb : 1), cells = S.agents.filter(a=>!noLab(a)).map(a=>({a, s:matCell(g,a,o,link)})).filter(c=>c.s);
     cells.forEach(c=>{ if(/^x/.test(c.s)) nElim++; else linked.add(c.a.uid); });
+    const MT = mergedTasks(g, true), tasksOf = a => new Set(MT.filter(k=>k.ags.some(x=>norm(x)===norm(acdName(a.agent))||norm(x)===norm(a.agent))).map(k=>norm(k.t)));
     ["8h","CT"].forEach(type=>{
       const L = cells.filter(c=>c.s.split("+").includes(type)).map(c=>c.a); if(!L.length) return; const groups = {};
-      L.forEach(a=>{ const k = (o.grp && a.support ? norm(a.support)+"|"+norm(a.principe||"") : a.uid); (groups[k] = groups[k]||[]).push(a); });
-      Object.values(groups).forEach(G=>{ const rk = Math.max(...G.map(a=>durRank(g,a)));
-        rows.push({gehId:g.id, ag:G.map(a=>a.uid), type, nb:Math.max(...G.map(nbOf)), plage: type==="CT" ? "Sur phase exposante" : (rk ? PLG[rk] : "En journée")}); });
+      L.forEach(a=>{ const k = o.grp && a.support ? norm(a.support)+"|"+norm(a.principe||"") : a.uid; (groups[k] = groups[k]||[]).push(a); });
+      /* une pompe = agents de même support, même prétraitement, mesurés en même temps ; en CT (phase précise), même tâche en plus */
+      const packs = []; Object.values(groups).forEach(G=>{
+        if(type!=="CT" || G.length<2){ packs.push(G); return; }
+        const comps = []; G.forEach(a=>{ const ts = tasksOf(a); const hit = comps.filter(c=>!ts.size || !c.ts.size || [...ts].some(t=>c.ts.has(t)));
+          if(!hit.length){ comps.push({ags:[a], ts:new Set(ts)}); return; }
+          const m = hit[0]; m.ags.push(a); ts.forEach(t=>m.ts.add(t)); hit.slice(1).forEach(h=>{ m.ags.push(...h.ags); h.ts.forEach(t=>m.ts.add(t)); comps.splice(comps.indexOf(h),1); }); });
+        comps.forEach(c=>packs.push(c.ags)); });
+      packs.forEach(G=>{ const rk = Math.max(...G.map(a=>durRank(g,a)));
+        rows.push({gehId:g.id, ag:G.map(a=>a.uid), type, nb:Math.max(...G.map(a=>nbOf(a,type))), plage: type==="CT" ? "Sur phase exposante" : (rk ? PLG[rk] : "En journée")}); });
     });
   }));
-  const etale = o.mode==="etale" && rows.length && rows.some(r=>r.nb>=3);
-  let blk = 0, l8 = 0, lc = 0, day = 1, d8 = 0, dc = 0;
-  rows.forEach(r=>{
-    if(etale){ const per = r.nb/3, cur = r.type==="8h" ? l8 : lc; if(cur+per>thr && (l8+lc)>0){ blk++; l8 = 0; lc = 0; } if(r.type==="8h") l8 += per; else lc += per; const b = blk*3; r.jour = r.nb>=3 ? "J"+(b+1)+" / J"+(b+2)+" / J"+(b+3) : "J"+(b+1); }
-    else { const cur = r.type==="8h" ? d8 : dc; if(cur+r.nb>thr && (d8+dc)>0){ day++; d8 = 0; dc = 0; } if(r.type==="8h") d8 += r.nb; else dc += r.nb; r.jour = "J"+day; }
-  });
+  /* planification : chaque prélèvement est placé au plus tôt, un par jour pour une même ligne, dans la limite des pompes et de la capacité des techniciens */
+  const C = CAP(), cap8 = C.h8*C.techs, capC = C.ct*C.techs, day = []; let maxDay = 0;
+  const fits = (d,t) => { const u = day[d] || {h8:0, ct:0}, h8 = u.h8+(t==="8h"?1:0), ct = u.ct+(t==="CT"?1:0); return h8<=cap8 && ct<=capC && (h8+Math.min(ct,C.techs))<=C.pumps; };
+  rows.forEach(r=>{ const ds = []; let d = 1;
+    for(let i=0;i<Math.max(1,r.nb);i++){ while(!fits(d, r.type) ) d++; day[d] = day[d] || {h8:0, ct:0}; if(r.type==="8h") day[d].h8++; else day[d].ct++; ds.push(d); maxDay = Math.max(maxDay,d); d++; }
+    r.jour = ds.map(x=>"J"+x).join(" / "); });
   S.plan = rows.map(r=>({id:uid(), kind:"row", jour:r.jour, ag:r.ag, agTxt:"", gehId:r.gehId, gehTxt:"", nb:r.nb, type:r.type, plage:r.plage}));
-  persist(); return {n:rows.length, nElim, orphans:S.agents.filter(a=>!linked.has(a.uid)).map(a=>a.agent)};
+  persist(); return {n:rows.length, nElim, days:maxDay, orphans:S.agents.filter(a=>!noLab(a) && !linked.has(a.uid)).map(a=>a.agent)};
 }
 /* ---- matrice GEH x agents ---- */
 function renderMat(){
-  const gl = gehList(), ags = sortedIdx().map(k=>S.agents[k]), W = $("#matWrap");
+  const gl = gehList(), ags = sortedIdx().map(k=>S.agents[k]).filter(a=>!noLab(a)), W = $("#matWrap");
   if(!gl.length || !ags.length){ W.innerHTML = '<div class="empty">La matrice apparaît dès qu\'il y a au moins un GEH et un agent retenu.</div>'; return; }
   const o = matOpts(), link = linkMap(); let nA = 0, nE = 0;
   const bulk = (kind,id) => '<select class="mb" data-mbulk="'+kind+'" data-id="'+id+'" title="Appliquer à toute la '+(kind==="r"?"ligne":"colonne")+'"><option value="">⋮</option>'+M_OPT.map(x=>'<option value="'+x[0]+'">'+x[1]+'</option>').join("")+'<option value="__def">Auto</option></select>';
@@ -1445,10 +1473,11 @@ $("#bMatReset").onclick = ()=>{ if(!confirm("Réinitialiser la matrice (retour a
 $("#gpCT").addEventListener("change", renderMat); $("#gpNb").addEventListener("change", renderMat);
 $("#bGenPlan").onclick = ()=>{
   if(!S.ateliers.length) return alert("Crée d'abord les GEH (onglets 2 ou 4).");
+  if(!capSet()){ alert(CAP_MSG); const f = $("#capP"); if(f) f.focus(); return; }
   if(S.plan.length && !confirm("Remplacer le plan actuel ("+S.plan.length+" lignes) par une proposition générée ?")) return;
-  const r = genPlan({nb:Math.max(1,parseInt($("#gpNb").value)||3), ct:$("#gpCT").checked, grp:$("#gpGrp").checked, mode:$("#gpMode").value});
+  const r = genPlan({nb:Math.max(1,parseInt($("#gpNb").value)||3), ct:$("#gpCT").checked, grp:$("#gpGrp").checked, mode:"cap"});
   renderPlan(); if(S.just && S.just.some(i=>i.auto)) genJust();
-  $("#gpMsg").innerHTML = r.n ? '<div class="ok"><b>'+r.n+' ligne(s) proposée(s).</b> À relire : nombre de prélèvements, regroupements, plages horaires et jours.</div>' + (r.orphans.length ? '<div class="warn"><b>'+r.orphans.length+' agent(s) retenu(s) sans GEH dans la matrice</b>, donc absents du plan : '+esc(r.orphans.join(" ; "))+'</div>' : '') : '<div class="warn">Aucune ligne générée : coche des couples GEH × agent dans la matrice (ou saisis des polluants sur le terrain).</div>';
+  $("#gpMsg").innerHTML = r.n ? '<div class="ok"><b>'+r.n+' ligne(s) proposée(s), '+r.days+' jour(s) de terrain.</b> À relire : nombre de prélèvements, regroupements, plages horaires et jours.</div>' + (r.orphans.length ? '<div class="warn"><b>'+r.orphans.length+' agent(s) retenu(s) sans GEH dans la matrice</b>, donc absents du plan : '+esc(r.orphans.join(" ; "))+'</div>' : '') : '<div class="warn">Aucune ligne générée : coche des couples GEH × agent dans la matrice (ou saisis des polluants sur le terrain).</div>';
 };
 
 /* ================= Import d'un inventaire tableur (ALPRO, Saverne, modèle SOCOTEC…) ================= */
@@ -1513,6 +1542,7 @@ function parseInventaire(sheets){
 /* ================= Pilote automatique ================= */
 $("#bAuto").onclick = ()=>{
   if(!S.ateliers.length) return alert("Importe d'abord un inventaire (Seirich ou autre) ou crée des GEH.");
+  if(!capSet()){ alert(CAP_MSG); const f = document.querySelector("#p-geh [data-cap]"); if(f) f.focus(); return; }
   /* 1. agents */
   const before = S.agents.length; const f0 = $("#candF").value; $("#candF").value = "reg";
   S.cand.forEach((c,i)=>{ if(candOK(c) && (c.refs.length || (!c.emis && (c.v8||c.vct||c.cmr)))) addCand(i); }); $("#candF").value = f0;
@@ -1526,24 +1556,24 @@ $("#bAuto").onclick = ()=>{
     }
   }
   /* 3. plan + justifications */
-  const r = genPlan({nb:3, ct:true, grp:true, mode:"etale"}); S.just = (S.just||[]).filter(i=>!i.auto || i.edited); const nj = genJust();
+  const r = genPlan({nb:3, ct:true, grp:true, mode:"cap"}); S.just = (S.just||[]).filter(i=>!i.auto || i.edited); const nj = genJust();
   persist(); renderGeh(); renderSel(); renderList(); renderCand();
   $("#autoMsg").innerHTML = '<b>'+(S.agents.length-before)+' agent(s) ajouté(s), '+msgDrop+r.n+' ligne(s) de plan, '+nj+' justification(s) proposée(s).</b> Relis l\'onglet 5 (matrice et plan), puis l\'onglet 6.';
 };
 
 /* ================= Plan d'échantillonnage ================= */
-const agName = u => { const a = S.agents.find(x=>x.uid===u); return a ? a.agent : null; };
+const agName = u => { const a = S.agents.find(x=>x.uid===u); return a && !noLab(a) ? a.agent : null; };
 function planAgents(r){ const l = (r.ag||[]).map(agName).filter(Boolean); if(r.agTxt && r.agTxt.trim()) l.push(...r.agTxt.split(/\n|\s\/\s/).map(x=>x.trim()).filter(Boolean)); return l; }
 function planGeh(r){ if(r.gehId==="__txt") return r.gehTxt||""; return r.gehId ? gehLabel(r.gehId) : ""; }
 let openDD = null;
 function ddSummary(r){ const l = planAgents(r); return l.length ? esc(l.join(" / ")) : '<span style="color:var(--mut)">Choisir les agents…</span>'; }
 function renderPlan(){
-  $("#thr").value = S.thr||8; renderMat();
+  $("#thr").value = S.thr||8; fillCap(); renderMat();
   const gl = gehList();
   const body = S.plan.map((r,pi)=>{
     const act = '<td class="act"><button class="btn sm" data-pup="'+pi+'" title="Monter">↑</button> <button class="btn sm" data-pdn="'+pi+'" title="Descendre">↓</button> <button class="btn sm" data-pdup="'+pi+'" title="Dupliquer">⧉</button> <button class="btn sm" data-pdel="'+pi+'" title="Supprimer">×</button></td>';
     if(r.kind==="sec") return '<tr class="sec"><td colspan="6"><input data-pi="'+pi+'" data-f="txt" value="'+esc(r.txt||"")+'" placeholder="Titre de section (ex : Option 1, Postes fixes)"></td>'+act+'</tr>';
-    const checks = S.agents.map(a=>'<label><input type="checkbox" data-pi="'+pi+'" data-ag="'+a.uid+'"'+((r.ag||[]).includes(a.uid)?' checked':'')+'> '+esc(a.agent)+'</label>').join("") || '<div class="legend">Aucun agent retenu (onglet 2).</div>';
+    const checks = S.agents.filter(a=>!noLab(a) || (r.ag||[]).includes(a.uid)).map(a=>'<label><input type="checkbox" data-pi="'+pi+'" data-ag="'+a.uid+'"'+((r.ag||[]).includes(a.uid)?' checked':'')+'> '+esc(a.agent)+'</label>').join("") || '<div class="legend">Aucun agent retenu (onglet 2).</div>';
     const gopts = '<option value="">—</option>'+gl.map(g=>'<option value="'+g.id+'"'+(r.gehId===g.id?' selected':'')+'>'+esc(g.label)+'</option>').join("")+'<option value="__txt"'+(r.gehId==="__txt"?' selected':'')+'>Autre (texte libre)…</option>';
     return '<tr><td style="width:140px"><input data-pi="'+pi+'" data-f="jour" list="dl-jours" value="'+esc(r.jour||"")+'"></td>'+
       '<td class="l" style="min-width:260px"><details class="dd" data-pi="'+pi+'"'+(openDD===pi?' open':'')+'><summary>'+ddSummary(r)+'</summary><div class="pop">'+checks+'<div style="margin-top:6px"><input data-pi="'+pi+'" data-f="agTxt" value="'+esc(r.agTxt||"")+'" placeholder="Autre agent / texte libre (séparer par « / »)"></div></div></details></td>'+
@@ -1560,7 +1590,7 @@ function renderChecks(){
   const lines = S.plan.filter(r=>r.kind!=="sec");
   /* agents non planifiés */
   const used = new Set(); lines.forEach(r=>(r.ag||[]).forEach(u=>used.add(u)));
-  const unp = S.agents.filter(a=>!used.has(a.uid)).map(a=>a.agent);
+  const unp = S.agents.filter(a=>!noLab(a) && !used.has(a.uid)).map(a=>a.agent);
   out.push(unp.length ? '<div class="warn"><b>'+unp.length+' agent(s) retenu(s) absent(s) du plan</b> — à planifier ou à justifier (élimination) : '+esc(unp.join(" ; "))+'</div>' : (S.agents.length?'<div class="ok">Tous les agents retenus figurent dans le plan.</div>':''));
   /* GEH non couverts */
   const ug = new Set(lines.map(r=>r.gehId)); const ng = gl.filter(g=>!ug.has(g.id)).map(g=>g.label);
@@ -1574,13 +1604,15 @@ function renderChecks(){
   S.plan.forEach(r=>{ if(r.kind==="sec"){ opt = /option/i.test(r.txt||""); return; } if(opt) return;
     const days = [...new Set([...(r.jour||"").matchAll(/J\s*(\d+)/gi)].map(m=>+m[1]))]; const nb = parseFloat(r.nb); if(!days.length || isNaN(nb) || !r.type) return;
     days.forEach(d=>{ load[d] = load[d]||{"8h":0,"CT":0}; load[d][r.type] += nb/days.length; }); });
-  const ds = Object.keys(load).map(Number).sort((a,b)=>a-b), thr = S.thr||8;
+  const ds = Object.keys(load).map(Number).sort((a,b)=>a-b), C = CAP(), cap8 = C.h8*C.techs, capC = C.ct*C.techs;
   if(ds.length){
-    const f = v => Math.round(v*10)/10;
-    out.push('<table class="t" style="max-width:520px"><thead><tr><th>Jour</th><th>Prélèvements 8 h</th><th>Prélèvements CT</th></tr></thead><tbody>'+ds.map(d=>'<tr><td>J'+d+'</td><td'+(load[d]["8h"]>thr?' style="background:#FFF3E6;font-weight:700"':'')+'>'+f(load[d]["8h"])+'</td><td'+(load[d]["CT"]>thr?' style="background:#FFF3E6;font-weight:700"':'')+'>'+f(load[d]["CT"])+'</td></tr>').join("")+'</tbody></table><div class="legend">Charge estimée par jour (nombre réparti à parts égales entre les jours d\'une ligne, options exclues). Orange : au-dessus du seuil de '+thr+'.</div>');
+    const f = v => Math.round(v*10)/10, bad = ' style="background:#FFF3E6;font-weight:700"';
+    out.push('<table class="t" style="max-width:620px"><thead><tr><th>Jour</th><th>Prélèvements 8 h</th><th>Prélèvements CT</th><th>Pompes</th></tr></thead><tbody>'+ds.map(d=>{ const p = load[d]["8h"]+Math.min(load[d]["CT"], C.techs); return '<tr><td>J'+d+'</td><td'+(load[d]["8h"]>cap8?bad:'')+'>'+f(load[d]["8h"])+' / '+cap8+'</td><td'+(load[d]["CT"]>capC?bad:'')+'>'+f(load[d]["CT"])+' / '+capC+'</td><td'+(p>C.pumps?bad:'')+'>'+f(p)+' / '+C.pumps+'</td></tr>'; }).join("")+'</tbody></table><div class="legend">Charge par jour / capacité ('+C.techs+' technicien(s), '+C.pumps+' pompes ; une pompe par prélèvement 8 h ; une pompe CT sert à tous les CT du technicien dans la journée ; les agents d\'une même ligne partagent la même pompe). Orange : capacité dépassée (options exclues).</div>');
   }
   $("#planChk").innerHTML = out.join("") || '<div class="empty">Rien à contrôler pour l\'instant.</div>';
 }
+function fillCap(){ $$("[data-cap]").forEach(el=>{ const v = parseInt((S.cap||{})[el.dataset.cap]); el.value = v>0 ? v : ""; }); }
+$$("[data-cap]").forEach(el=>el.addEventListener("input", ()=>{ S.cap = S.cap||{}; S.cap[el.dataset.cap] = parseInt(el.value)||""; $$("[data-cap]").forEach(o=>{ if(o!==el && o.dataset.cap===el.dataset.cap) o.value = el.value; }); persist(); renderChecks(); }));
 $("#thr").addEventListener("input", e=>{ S.thr = parseInt(e.target.value)||8; persist(); renderChecks(); });
 function planTable(){
   const H = ["Jour","Agents chimiques","N° GEH","Nb total de prélèvements","Type de VLEP","Plage horaire de prélèvement"], W = [60,230,170,80,70,170];
@@ -1719,27 +1751,36 @@ function fillPlan(xml){
 }
 /* dénomination de la base si l'agent y existe (par CAS ou par nom), sinon nom saisi */
 const _acdC = new Map();
-function acdName(nm){ nm = String(nm||"").trim(); const k = norm(nm); if(_acdC.has(k)) return _acdC.get(k);
-  let out = nm; const c = (S.cand||[]).find(x=>norm(x.nom)===k), ag = S.agents.find(x=>norm(x.agent)===k);
-  const b = c ? baseByCas(c.cas, c.nom)[0] : (ag ? null : baseByCas("", nm)[0]);
-  if(b) out = cleanName(b.agent); else if(ag) out = ag.agent;
+function acdNames(nm){ nm = String(nm||"").trim(); const k = norm(nm); if(_acdC.has(k)) return _acdC.get(k);
+  let out = [nm]; const c = (S.cand||[]).find(x=>norm(x.nom)===k), ag = S.agents.find(x=>norm(x.agent)===k);
+  const bs = c ? baseByCas(c.cas, c.nom) : (ag ? [] : baseByCas("", nm));
+  if(bs.length) out = [...new Set(bs.map(b=>cleanName(b.agent)))]; else if(ag) out = [ag.agent];
   _acdC.set(k, out); return out; }
-function mergedTasks(g){
-  const m = new Map(), NL = new Set(S.agents.filter(noLab).flatMap(a=>[norm(a.agent), a.cas?norm(a.cas):""].filter(Boolean))), RN = new Set(S.agents.flatMap(a=>[norm(a.agent), a.cas?norm(a.cas):""].filter(Boolean))), retained = n => !S.agents.length || RN.has(norm(n)) || RN.has(norm(acdName(n))) || (()=>{ const c=(S.cand||[]).find(z=>norm(z.nom)===norm(n)); return !!(c && c.cas && RN.has(norm(c.cas))); })(), isNL = n => !retained(n) || NL.has(norm(n)) || (()=>{ const c=(S.cand||[]).find(z=>norm(z.nom)===norm(n)); return !!(c && c.cas && NL.has(norm(c.cas))); })(), add = (arr,v)=>{ v = String(v||"").trim(); if(v && !arr.some(y=>norm(y)===norm(v))) arr.push(v); };
-  (g.taches||[]).forEach(k=>{ const key = norm(k.t||""); let x = m.get(key); if(!x){ x = {t:k.t||"", dur:[], frq:[], prods:[], ags:[], pa:new Map(), multi:new Set()}; m.set(key,x); }
+const acdName = nm => acdNames(nm)[0];
+function mergedTasks(g, raw){
+  const m = new Map(), NL = new Set(S.agents.filter(noLab).flatMap(a=>[norm(a.agent), a.cas?norm(a.cas):""].filter(Boolean))), RN = new Set(S.agents.flatMap(a=>[norm(a.agent), a.cas?norm(a.cas):""].filter(Boolean))), retained = n => !S.agents.length || RN.has(norm(n)) || RN.has(norm(acdName(n))) || (()=>{ const c=(S.cand||[]).find(z=>norm(z.nom)===norm(n)); return !!(c && c.cas && RN.has(norm(c.cas))); })(), isNL = n => raw ? false : !retained(n) || NL.has(norm(n)) || (()=>{ const c=(S.cand||[]).find(z=>norm(z.nom)===norm(n)); return !!(c && c.cas && NL.has(norm(c.cas))); })(), add = (arr,v)=>{ v = String(v||"").trim(); if(v && !arr.some(y=>norm(y)===norm(v))) arr.push(v); };
+  (g.taches||[]).forEach((k,ki)=>{ const key = norm(k.t||""); let x = m.get(key); if(!x){ x = {t:k.t||"", dur:[], frq:[], prods:[], ags:[], pa:new Map(), multi:new Set(), idx:[], ids:[], q:[]}; m.set(key,x); }
+    x.idx.push(ki); x.ids.push(k.id); add(x.q, [k.qj,k.qa].filter(Boolean).join(" · "));
     add(x.dur,k.duree); add(x.frq,k.freq);
     const L = String(k.prod||"").split("\n").map(z=>z.trim()).filter(Boolean);
-    if(k.em) L.forEach(l=>(isNL(l)||isNL(acdName(l))) ? (x.nl=1) : add(x.ags,acdName(l))); else { if(L[0]) add(x.prods,L[0]); L.slice(1).forEach(l=>l.split(/,\s+/).forEach(a=>{ a = acdName(a); if(isNL(a)){ x.nl=1; return; } add(x.ags,a); const na = norm(a); if(!x.pa.has(na)) x.pa.set(na,new Set()); x.pa.get(na).add(norm(L[0]||"")); })); } });
+    if(k.em) L.forEach(l=>acdNames(l).forEach(n=>(isNL(l)||isNL(n)) ? (x.nl=1) : add(x.ags,n))); else { if(L[0]) add(x.prods,L[0]); L.slice(1).forEach(l=>l.split(/,\s+/).forEach(a=>{ acdNames(a).forEach(a=>{ if(isNL(a)){ x.nl=1; return; } add(x.ags,a); const na = norm(a); if(!x.pa.has(na)) x.pa.set(na,new Set()); x.pa.get(na).add(norm(L[0]||"")); }); })); } });
   m.forEach(x=>x.pa.forEach((ps,na)=>{ if(ps.size>1) x.multi.add(na); }));
-  return [...m.values()].filter(x=>x.ags.length || !x.nl);
+  return raw ? [...m.values()] : [...m.values()].filter(x=>x.ags.length || !x.nl);
 }
 const PROD_MAX = 6;
 /* cellule « produits / ACD » : produits en normal (résumés au-delà de PROD_MAX), ACD une seule fois en gras */
 function taskCellLines(k){
   const big = k.prods.length>PROD_MAX, out = [];
   if(k.prods.length) out.push(big ? k.prods.length+" produits, dont : "+k.prods.slice(0,3).join(", ")+"… (liste complète dans l'Excel)" : k.prods.join(", "));
-  if(k.ags.length>4) out.push({t:k.ags.join(", "), b:true}); else k.ags.forEach(a=>out.push({t:a, b:true}));
+  if(k.ags.length>4) out.push({t:k.ags.join(" ; "), b:true}); else k.ags.forEach(a=>out.push({t:a, b:true}));
   return out;
+}
+const qHtml = k => !k.q.length ? '' : '<div class="m">'+(k.q.length<=2 ? 'Quantité (Seirich) : '+esc(k.q.join(" ; ")) : 'Quantités variables selon les produits')+'</div>';
+const cellHtml = k => taskCellLines(k).map(l=> (l && typeof l==="object") ? '<div class="m"><b>'+esc(l.t)+'</b></div>' : '<div class="m">'+esc(l)+'</div>').join("");
+function groupedTable(g){
+  const L = mergedTasks(g, true); if(!L.length) return '<div class="legend">Aucune tâche.</div>';
+  return '<table class="t"><thead><tr><th>Tâche élémentaire</th><th style="width:150px">Durée</th><th style="width:110px">Fréquence</th><th>Produits (normal) / agents chimiques (gras)</th></tr></thead><tbody>'+
+    L.map(k=>'<tr><td class="l">'+esc(k.t||"(sans nom)")+(k.idx.length>1?'<div class="m">'+k.idx.length+' lignes fusionnées</div>':'')+'</td><td>'+esc(k.dur.join(" / "))+'</td><td>'+esc(k.frq.join(" / "))+'</td><td class="l">'+cellHtml(k)+qHtml(k)+'</td></tr>').join("")+'</tbody></table>';
 }
 function gcell(w, lines, o){
   o = o||{}; const rpr = '<w:rPr><w:rFonts w:cs="Arial"/><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr>';
@@ -1780,7 +1821,7 @@ function fillGeh(xml){
     out += '<w:p><w:pPr><w:keepNext/><w:spacing w:before="120" w:after="120"/><w:rPr><w:b/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr><w:t xml:space="preserve">'+esc((ai+1)+" – "+(a.nom||""))+'</w:t></w:r></w:p>';
     a.gehs.forEach(g=>{
       let t = '<w:tbl>'+head+rs[0][0].replace(/<w:pPr>(<w:pStyle [^>]*\/>)?/g,(m,ps)=>'<w:pPr>'+(ps||'')+'<w:keepNext/>');
-      n++; const L = g.taches.length ? mergedTasks(g) : [{t:"",dur:[],frq:[],prods:[],ags:[]}];
+      n++; const L = (g.taches.length && mergedTasks(g).length) ? mergedTasks(g) : [{t:"",dur:[],frq:[],prods:[],ags:[]}];
       L.forEach((k,i)=>{
         const vm = i===0 ? "restart" : "cont", first = i===0;
         t += '<w:tr><w:trPr><w:trHeight w:val="298"/></w:trPr>'+
@@ -1806,6 +1847,47 @@ function fillFieldsSeq(seg, vals, sizes){
     const sz = (sizes && sizes[i]) || 20; return a+'<w:r><w:rPr><w:sz w:val="'+sz+'"/><w:szCs w:val="'+sz+'"/></w:rPr>'+String(v).split("\n").map((l,j)=>(j?'<w:br/>':'')+'<w:t xml:space="preserve">'+esc(l)+'</w:t>').join("")+'</w:r>'+c; });
 }
 const fmtDate = v => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v||""); return m ? m[3]+"/"+m[2]+"/"+m[1] : (v||""); };
+
+/* ---- §3.2 : choix 1 (pas d'ERC) / choix 2 (ERC) : on ne garde qu'un seul bloc ---- */
+function fillErc(xml){
+  const e = S.ent; const mode = e.ercMode || ((S.cand||[]).length ? "present" : ""); if(!mode) return xml;
+  const a = xml.indexOf("Choix 1"); if(a<0) return xml;
+  const pStart = i => Math.max(xml.lastIndexOf("<w:p ", i), xml.lastIndexOf("<w:p>", i));
+  const s0 = pStart(a), eIdx = posOfText(xml, "Le détail des modifications", a); if(eIdx<0) return xml; const e0 = xml.indexOf("</w:p>", eIdx)+6;
+  const seg = xml.slice(s0, e0), P = [...seg.matchAll(/<w:p[ >][\s\S]*?<\/w:p>/g)].map(m=>m[0]);
+  const txt = p => textOf(p).replace(/\s+/g," ").trim(), nored = p => p.replace(/<w:color w:val="FF0000"\/>/g,"");
+  const mk = (p, t) => { const ppr = (/<w:pPr>[\s\S]*?<\/w:pPr>/.exec(p)||[""])[0].replace(/<w:rPr>[\s\S]*?<\/w:rPr>/,""); return "<w:p>"+ppr+'<w:r><w:t xml:space="preserve">'+esc(t)+"</w:t></w:r></w:p>"; };
+  const i2 = P.findIndex(p=>/^Choix 2/.test(txt(p))); if(i2<0) return xml;
+  let out = [];
+  if(mode==="absent"){ out = P.slice(0,i2).filter(p=>!/^Choix 1/.test(txt(p))); }
+  else {
+    P.slice(i2+1).forEach(p=>{ const t = txt(p);
+      if(/référencée/.test(t)){ out.push(fillFieldsSeq(p, [null, e.ercRef||"Seirich", fmtDate(e.ercDate)])); return; }
+      if(/^Descriptif de la méthode de l/.test(t)){ out.push(mk(p, "Descriptif de la méthode de l’ERC (SEIRICH) et de la méthode de cotation :")); return; }
+      if(/^Elle comporte l.inventaire/.test(t)){ out.push(nored(p)); return; }
+      if(/^Résultats de l.ERC/.test(t)){ out.push(mk(p, "Résultats de l’ERC : les GEH, leurs tâches et les agents chimiques issus de l’inventaire sont présentés au paragraphe 3.7.")); return; }
+      if(/^Compléments éventuels/.test(t) || /^Une analyse critique/.test(t) || /^supprimer certains/.test(t) || /^Le détail des modifications/.test(t)){ out.push(nored(p)); return; }
+      if(/^reclasser certains/.test(t)) return;
+      if(!t && /FORMTEXT/.test(p)) return;
+      out.push(p); });
+  }
+  return xml.slice(0,s0) + out.join("") + xml.slice(e0);
+}
+/* ---- §2.3 : phrases rouges du modèle (exclusions / VLEP non réglementaires) : retirées, à ajouter à la main si le client l'a demandé ---- */
+function dropRedClient(xml){
+  [/A votre demande, les services \/ laboratoires/, /A votre demande, x pr.l.vements individuels/].forEach(re=>{
+    const m = re.exec(textOf(xml)); if(!m) return;
+    const i = posOfText(xml, m[0].slice(0,24)); if(i<0) return; const st = Math.max(xml.lastIndexOf("<w:p ", i), xml.lastIndexOf("<w:p>", i)), en = xml.indexOf("</w:p>", i)+6;
+    if(st>=0 && en>st && /FF0000/.test(xml.slice(st,en))) xml = xml.slice(0,st)+xml.slice(en); });
+  return xml;
+}
+/* ---- pieds de page : n° d'affaire ---- */
+function fillFooter(xml, aff){
+  if(!aff) return xml; const a = xml.indexOf("affaire"); if(a<0) return xml;
+  const re = /<w:r[ >](?:(?!<w:r[ >])[\s\S])*?<w:t[^>]*>[^<]*:[^<]*<\/w:t>(?:(?!<w:r[ >])[\s\S])*?<\/w:r>/g; re.lastIndex = Math.max(xml.lastIndexOf("<w:r>", a), xml.lastIndexOf("<w:r ", a));
+  const m = re.exec(xml); if(!m) return xml; const rpr = (/<w:rPr>[\s\S]*?<\/w:rPr>/.exec(m[0])||[""])[0];
+  return xml.slice(0, m.index+m[0].length) + '<w:r>'+rpr+'<w:t xml:space="preserve"> '+esc(aff)+' </w:t></w:r>' + xml.slice(m.index+m[0].length);
+}
 function fillCover(xml){
   const e = S.ent;
   try{
@@ -1836,8 +1918,8 @@ function fillCover(xml){
     /* segment 1 : destinataire */
     b = posOfText(xml, "CONTROLE REGLEMENTAIRE");
     if(b>0){ let s = xml.slice(0,b);
-      s = fillFieldsSeq(s, [e.nom, e.adresse, e.cpville]);
-      if((e.contact||"").trim()) s = s.replace(/(<w:t(?: [^>]*)?>)([^<]*attention de\s*)(<\/w:t>)/, (m,o,t,c)=>'<w:t xml:space="preserve">'+t.replace(/\s*$/," ")+esc(e.contact.trim())+c);
+      s = fillFieldsSeq(s, [e.nom||"\u200b", e.adresse||"\u200b", e.cpville||"\u200b"]);
+      if(!(e.contact||"").trim()) s = s.replace(/(<w:t(?: [^>]*)?>)([^<]*attention de\s*)(<\/w:t>)/, '$1$3'); else s = s.replace(/(<w:t(?: [^>]*)?>)([^<]*attention de\s*)(<\/w:t>)/, (m,o,t,c)=>'<w:t xml:space="preserve">'+t.replace(/\s*$/," ")+esc(e.contact.trim())+c);
       xml = s + xml.slice(b); }
   }catch(err){ console.warn("Page de garde :", err); }
   return xml;
@@ -1981,7 +2063,7 @@ function genJust(){
   const inPlan = a => !hasPlan || INFO.has(norm(a.agent));
   const horsAcc = S.agents.filter(a=>!(a.accP==="X"&&a.accA==="X") && inPlan(a) && !noLab(a));
   const sansLabo = S.agents.filter(a=>noLab(a));
-  if(sansLabo.length) add("ag","ag.nolab","Les agents chimiques suivants n’ont pas été retenus dans la stratégie de prélèvement : aucun laboratoire ne réalise leur analyse.", true, sansLabo.map(a=>String(a.agent).split(" — ")[0]));
+  if(sansLabo.length) add("ag","ag.nolab","Les agents chimiques suivants n’ont pas été retenus dans la stratégie de prélèvement : aucun laboratoire ne réalise leur analyse.", true, sansLabo.map(a=>{ const n = String(a.agent).split(" — ")[0]; return a.ref!=null ? n : (n===n.toUpperCase() ? n.charAt(0)+n.slice(1).toLowerCase() : n); }));
   if(horsAcc.length) add("ag","ag.hors","Pour les agents chimiques suivants, aucune méthode de prélèvement et d’analyse sous accréditation n’est disponible : une méthode générique, la sous-traitance ou un développement spécifique sera mis en œuvre ("+TBC+").", true, horsAcc.map(a=>String(a.agent).split(" — ")[0]));
   const notRet = (S.cand||[]).filter(c=>(c.v8||c.vct) && !candState(c) && !c.emis).map(c=>c.nom);
   if(notRet.length) add("ag","ag.nr","Certains paramètres n’ont pas été retenus compte tenu de l’absence de VLEP réglementaire applicable, de l’absence de méthode de référence ou de leur utilisation négligeable :", false, [...new Set(notRet)].slice(0,40));
@@ -2464,11 +2546,12 @@ $("#bWord").onclick = async ()=>{
     const zip = await JSZip.loadAsync(trameBuf || b64ToBytes(TRAME_B64));
     const f = zip.file("word/document.xml"); if(!f) throw new Error("Fichier Word invalide.");
     let xml = await f.async("string");
-    xml = fillCover(xml); xml = fillTable24(xml); xml = fillIdent(xml); if(S.ateliers.length) xml = fillAteliers(xml); if(S.ateliers.length) xml = fillGeh(xml); if(S.plan.length) xml = fillPlan(xml); xml = fillJust(xml);
+    xml = fillCover(xml); xml = dropRedClient(xml); xml = fillErc(xml); xml = fillTable24(xml); xml = fillIdent(xml); if(S.ateliers.length) xml = fillAteliers(xml); if(S.ateliers.length) xml = fillGeh(xml); if(S.plan.length) xml = fillPlan(xml); xml = fillJust(xml);
     zip.file("word/document.xml", xml);
+    for(const n of Object.keys(zip.files)){ if(/^word\/footer\d*\.xml$/.test(n)){ const fx = await zip.file(n).async("string"); if(/affaire/.test(fx)) zip.file(n, fillFooter(fx, (S.ent.affaire||"").trim())); } }
     const blob = await zip.generateAsync({type:"blob", compression:"DEFLATE", mimeType:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
     download(blob, "Strategie_"+safe(S.ent.nom)+"_"+today()+".docx");
-    msg("Word généré : "+S.agents.length+" agent(s) dans le tableau §2.4, identification remplie"+(S.ateliers.length?", GEH et tâches (§3.7)":"")+(S.plan.length?", plan d'échantillonnage ("+S.plan.filter(r=>r.kind!=="sec").length+" lignes).":"."));
+    msg("Word généré : "+S.agents.filter(a=>!noLab(a)).length+" agent(s) dans le tableau §2.4, identification remplie"+(S.ateliers.length?", GEH et tâches (§3.7)":"")+(S.plan.length?", plan d'échantillonnage ("+S.plan.filter(r=>r.kind!=="sec").length+" lignes).":"."));
   }catch(err){ msg("Échec de l'export Word : "+esc(err.message), "warn"); }
 };
 
@@ -2515,7 +2598,7 @@ async function buildXlsx(){
   const s5 = sheetXml(["Jour","Agents chimiques","N° GEH","Nb total de prélèvements","Type de VLEP","Plage horaire de prélèvement"], pd, [14,55,32,14,12,40], (r,c)=> r.sec ? 3 : 2, {merges:pm, noFilter:true});
   /* Tâches (3.7) */
   const td = []; let gn2 = 0;
-  S.ateliers.forEach(a=>a.gehs.forEach(g=>{ gn2++; const L = g.taches.length ? mergedTasks(g) : [{t:"",dur:[],frq:[],prods:[],ags:[]}];
+  S.ateliers.forEach(a=>a.gehs.forEach(g=>{ gn2++; const L = (g.taches.length && mergedTasks(g).length) ? mergedTasks(g) : [{t:"",dur:[],frq:[],prods:[],ags:[]}];
     L.forEach(k=>td.push([gn2, a.nom||"", g.des||"", g.eff||"", g.orga||"", k.t||"", k.dur.join(" / "), k.frq.join(" / "), k.prods.join(", "), k.ags.join("\n"), String(g.epc||"").replace(/(^|,\s*|\n)\s*(absence de|pas de|sans|aucune|aucun) ventilation[^,\n]*/gi,"$1").replace(/(^|,)\s*aucun\s*(?=,|$)/gi,"$1").replace(/^[,\s]+|[,\s]+$/g,""), g.epi||"", g.com||""])); }));
   const s6 = sheetXml(["N° GEH","Atelier","Désignation du GEH","Effectif","Organisation du travail","Tâche élémentaire","Durée d'exposition","Fréquence d'exposition","Produits utilisés","Agents chimiques (ACD)","Environnement / EPC","EPI","Commentaire"], td, [8,24,30,10,22,40,22,16,44,34,24,24,30], (r,c)=>2);
   const z = new JSZip();
@@ -2529,7 +2612,7 @@ async function buildXlsx(){
   return z.generateAsync({type:"blob", compression:"DEFLATE", mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
 }
 $("#bXlsx").onclick = async ()=>{
-  try{ download(await buildXlsx(), "Strategie_"+safe(S.ent.nom)+"_"+today()+".xlsx"); msg("Excel généré : "+S.agents.length+" agent(s), "+S.plan.filter(r=>r.kind!=="sec").length+" ligne(s) de plan, 6 feuilles."); }
+  try{ download(await buildXlsx(), "Strategie_"+safe(S.ent.nom)+"_"+today()+".xlsx"); msg("Excel généré : "+S.agents.filter(a=>!noLab(a)).length+" agent(s), "+S.plan.filter(r=>r.kind!=="sec").length+" ligne(s) de plan, 6 feuilles."); }
   catch(err){ msg("Échec de l'export Excel : "+esc(err.message), "warn"); }
 };
 
@@ -2735,10 +2818,14 @@ function dvAnalyse(inp, labsOk){
   const A = [];
   inp.forEach(x=>{
     const cas = (x.cas||"").trim(); let r = dvOffers(cas, x.nom);
-    let list = r.list.filter(o=>labsOk.has(o.lab)); const base = dvBase(cas);
-    list = list.length ? dvRank(list, cas, base) : [];
+    const base = dvBase(cas), key = cas || norm(x.nom), sel = (S.dvSel||{})[key]; let mode = r.mode, ex = r.ex, valid = false, skipped = false, manual = false;
+    const allR = r.list.length ? dvRank(r.list, cas, base) : [];
+    let list = allR.filter(o=>labsOk.has(o.lab));
+    if(sel && sel.t==="o"){ const i = allR.findIndex(o=>o.lab===sel.lab && o.code===sel.code && (o.famName||"")===(sel.fam||"")); if(i>=0){ const c = allR[i]; list = [c].concat(list.filter(o=>o!==c)); valid = true; } }
+    else if(sel && sel.t==="c"){ list = [dvCustom(sel.o)]; mode = "manuel"; ex = "Solution saisie : "+[sel.o.lab, sel.o.nom, sel.o.sup].filter(Boolean).join(" · "); manual = true; }
+    else if(sel && sel.t==="x"){ list = []; skipped = true; }
     let fl = null; for(const b of base){ const mn = parseFloat(String(b.dmin8).replace(",",".")), mx = parseFloat(String(b.dmax8).replace(",",".")); if(!isNaN(mn)&&!isNaN(mx)){ fl = [mn,mx]; break; } }
-    A.push(Object.assign({}, x, {cas, mode:r.mode, ex:r.ex, offs:list, base, fl, filtered:r.list.length>0 && !list.length}));
+    A.push(Object.assign({}, x, {cas, key, mode, ex, offs:list, all:allR, base, fl, valid, skipped, manual, sel:sel||null, filtered:r.list.length>0 && !list.length && !skipped}));
   });
   /* GEH -> prélèvements regroupés (couverture gloutonne par famille de prélèvement) */
   const gm = new Map(); A.forEach(a=>(a.gehs.length?a.gehs:["Ensemble"]).forEach(g=>{ if(!gm.has(g)) gm.set(g,[]); gm.get(g).push(a); }));
@@ -2762,7 +2849,7 @@ function dvAnalyse(inp, labsOk){
 function dvInputProject(withCand){
   const out = new Map(), put = (nom,cas,v8,vct,cmr,geh)=>{ const k = cas || norm(nom); let x = out.get(k); if(!x){ x = {nom, cas:cas||"", v8:v8||"", vct:vct||"", cmr:cmr||"", gehs:[], prods:[]}; out.set(k,x); } if(geh && !x.gehs.includes(geh)) x.gehs.push(geh); return x; };
   S.ateliers.forEach(a=>a.gehs.forEach(g=>{ const gn = g.des||"(GEH sans nom)";
-    (g.agents||[]).forEach(u=>{ const ag = S.agents.find(x=>x.uid===u); if(ag) put(ag.agent, ag.cas, ag.v8, ag.vct, ag.cmr, gn); });
+    [...new Set((g.agents||[]).concat(agentsOfGeh(g)))].forEach(u=>{ const ag = S.agents.find(x=>x.uid===u); if(ag) put(ag.agent, ag.cas, ag.v8, ag.vct, ag.cmr, gn); });
     if(withCand){ const names = new Set([g.des].concat(g.srcs||[])); (S.cand||[]).forEach(c=>{ if(c.emis) return; if((c.gehs||[]).some(n=>names.has(n))){ const x = put(c.nom, c.cas, c.v8, c.vct, c.cmr, gn); (c.prods||[]).forEach(p=>{ if(!x.prods.includes(p)) x.prods.push(p); }); } }); } }));
   if(!out.size) (S.agents||[]).forEach(ag=>put(ag.agent, ag.cas, ag.v8, ag.vct, ag.cmr, ""));
   return [...out.values()];
@@ -2800,7 +2887,11 @@ async function dvReadFile(f){
 }
 /* ---- rendu ---- */
 const dvEur = v => v==null ? "" : v.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" €";
-function dvStatus(a){ const o = a.offs[0]; if(!o) return a.filtered ? "Hors labos cochés" : "Non trouvé"; return "Faisable – "+(o.cofrac?"accrédité COFRAC":"non accrédité")+(a.mode==="équivalence"?" – équivalence à valider":""); }
+function dvStatus(a){ const o = a.offs[0]; if(a.skipped) return "Écarté (choix)"; if(!o) return a.filtered ? "Hors labos cochés" : "Non trouvé"; if(a.manual) return "Solution saisie – à confirmer avec le labo"; return "Faisable – "+(o.cofrac?"accrédité COFRAC":"non accrédité")+(a.mode==="équivalence" ? (a.valid ? " – équivalence validée" : " – équivalence à valider") : ""); }
+const dvNum = v => { const n = parseFloat(String(v==null?"":v).replace(",",".")); return isNaN(n) ? null : n; };
+function dvCustom(c){ const sp = dvNum(c.supPrix), pp = dvNum(c.prePrix);
+  return {lab:c.lab||"Saisie manuelle", src:"manuel", code:c.code||"—", nom:c.nom||"Solution saisie", lq:c.lq||"", meth:c.meth||"", cofrac:!!c.cofrac, fam:"manuel|"+norm(c.lab)+"|"+norm(c.sup)+"|"+norm(c.pre), famName:[c.sup,c.pre].filter(Boolean).join(" + "),
+    sup: c.sup ? ["", c.sup, sp] : null, pre: c.pre ? ["", c.pre, pp] : null, pa: dvNum(c.prix)||0, extra:null, variants:"", lqug:null}; }
 function dvLabBase(a){ return [...new Set(a.base.map(b=>b.labo).filter(l=>l && l!=="-" && !/sans objet/i.test(l)))].join(" / "); }
 function dvVol(a){ const o = a.offs[0], v = parseFloat(String(a.v8).replace(",",".")); return (o && o.lqug && v>0) ? o.lqug/(0.1*v) : null; }
 function dvFlowTxt(mem){
@@ -2822,12 +2913,13 @@ function renderDevis(){
   const w = $("#dvOut"); if(!DV.ready){ w.innerHTML = ""; return; }
   const R = DV.R, ok = R.A.filter(a=>a.offs.length).length, P = dvPlanRows(R), nPre = R.plan.reduce((t,p)=>t+p.picks.length,0);
   let h = '<div class="card"><h2>Résultat</h2><div class="ok">'+R.A.length+' agent(s) analysé(s) : <b>'+ok+'</b> avec offre au catalogue, <b>'+(R.A.length-ok)+'</b> sans offre. '+R.plan.length+' GEH / ensemble(s), <b>'+nPre+'</b> prélèvement(s) après regroupement. Coût estimé HT : <b>'+dvEur(P.tg)+'</b> regroupé, contre '+dvEur(P.ts)+' en prélèvements séparés (économie '+dvEur(P.ts-P.tg)+').</div>'+
-    '<div class="legend">Prix HT remisés SOCOTEC (catalogue 2026), hors port, location de pompe et frais de dossier. TERA : support chiffré seulement s\'il figure au catalogue. Vérifie capacités de piégeage et interférences avant de retenir un regroupement.</div>'+
+    '<div class="legend">Prix HT remisés SOCOTEC (catalogue 2026), hors port, location de pompe et frais de dossier. TERA : support chiffré seulement s\'il figure au catalogue. Vérifie capacités de piégeage et interférences avant de retenir un regroupement. <b>Clique sur une ligne jaune (à vérifier) ou rouge (non trouvé)</b> pour choisir une offre ou saisir ta propre solution.</div>'+
     '<div class="row"><button class="btn pri" id="dvXlsx" type="button">Exporter en Excel</button></div></div>';
   h += '<div class="card"><h2>Faisabilité par agent</h2><div style="overflow:auto"><table class="t"><thead><tr><th>Agent</th><th>CAS</th><th>VLEP 8h</th><th>Faisabilité</th><th>Labo (base)</th><th>Labo retenu</th><th>Analyse</th><th>LQ</th><th>Support</th><th>Prétraitement</th><th>Total HT</th><th>Vol. mini (L)</th></tr></thead><tbody>';
   R.A.slice().sort((x,y)=>(x.offs.length?0:1)-(y.offs.length?0:1) || x.nom.localeCompare(y.nom)).forEach(a=>{ const o = a.offs[0], v = dvVol(a), st = dvStatus(a);
     const cls = !o ? "del" : (a.mode==="équivalence" ? "warn" : "");
-    h += '<tr'+(!o?' style="background:#FBE5D6"':(a.mode==="équivalence"?' style="background:#FFF2CC"':''))+'><td class="l">'+esc(a.nom)+(a.offs.length>1?'<span class="m">'+(a.offs.length-1)+' autre(s) offre(s) dans l\'Excel</span>':'')+'</td><td>'+esc(a.cas)+'</td><td>'+esc(a.v8||"")+'</td><td class="l">'+esc(st)+(a.ex?'<span class="m">'+esc(a.ex)+'</span>':'')+'</td><td class="l">'+esc(dvLabBase(a)||"—")+'</td>'+
+    const chk = !a.skipped && (!o || (a.mode==="équivalence" && !a.valid) || a.manual);
+    h += '<tr data-dvk="'+esc(a.key)+'" style="cursor:pointer;'+(a.skipped?'background:#EEE;color:#777':(!o?'background:#FBE5D6':(chk?'background:#FFF2CC':'')))+'" title="Cliquer pour choisir / modifier"><td class="l">'+esc(a.nom)+(chk||a.skipped||a.sel?'<span class="m" style="color:#b45309">'+(a.skipped?'écarté — cliquer pour modifier':(!o?'non trouvé — cliquer pour saisir une solution':(a.manual?'solution saisie — cliquer pour modifier':'à vérifier — cliquer pour choisir')))+'</span>':(a.offs.length>1?'<span class="m">cliquer pour choisir une autre offre</span>':''))+(a.offs.length>1?'<span class="m">'+(a.offs.length-1)+' autre(s) offre(s)</span>':'')+'</td><td>'+esc(a.cas)+'</td><td>'+esc(a.v8||"")+'</td><td class="l">'+esc(st)+(a.ex?'<span class="m">'+esc(a.ex)+'</span>':'')+'</td><td class="l">'+esc(dvLabBase(a)||"—")+'</td>'+
       (o ? '<td class="l">'+esc(o.lab)+'</td><td class="l">'+esc(o.code+" – "+o.nom)+'</td><td>'+esc(o.lq)+'</td><td class="l">'+esc(o.sup?o.sup[0]+" – "+o.sup[1]:"")+(o.sup&&o.sup[2]!=null?'<span class="m">'+dvEur(o.sup[2])+'</span>':'')+'</td><td class="l">'+esc(o.pre?o.pre[0]+" – "+o.pre[1]:"—")+(o.pre&&o.pre[2]!=null?'<span class="m">'+dvEur(o.pre[2])+'</span>':'')+'</td><td>'+dvEur(dvTotal(o))+'<span class="m">dont analyse '+dvEur(o.pa)+'</span></td><td>'+(v?v.toFixed(2):"")+'</td>' : '<td colspan="7" class="l">—</td>')+'</tr>'; });
   h += '</tbody></table></div></div>';
   h += '<div class="card"><h2>Co-prélèvements par GEH</h2><div class="legend" style="margin-bottom:8px">Agents d\'un même GEH dosables sur un même prélèvement (même labo, même support, même prétraitement, débits compatibles). Support et prétraitement comptés une seule fois.</div><div style="overflow:auto"><table class="t"><thead><tr><th>GEH</th><th>N°</th><th>Labo</th><th>Famille de prélèvement</th><th>Agents sur ce prélèvement</th><th>Débit commun</th><th>Total regroupé</th><th>Si séparés</th></tr></thead><tbody>'+
@@ -2870,6 +2962,44 @@ function dvXlsxBlob(){
   return z.generateAsync({type:"blob", compression:"DEFLATE", mimeType:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
 }
 const DV_STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="5"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font><font><b/><sz val="10"/><color rgb="FF0000FF"/><name val="Arial"/></font><font><b/><sz val="10"/><color rgb="FFB35A00"/><name val="Arial"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF00ACE8"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF3E6"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFBFE7F7"/></left><right style="thin"><color rgb="FFBFE7F7"/></right><top style="thin"><color rgb="FFBFE7F7"/></top><bottom style="thin"><color rgb="FFBFE7F7"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="7"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="3" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="4" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+
+/* ---- fenêtre de choix par agent (agents à vérifier / non trouvés) ---- */
+function dvReanalyse(){ if(!DV.inp) return; DV.R = dvAnalyse(DV.inp, dvLabs()); renderDevis(); }
+function dvClose(){ const m = document.getElementById("dvModal"); if(m) m.remove(); }
+function dvSetSel(key, v){ S.dvSel = S.dvSel||{}; if(v) S.dvSel[key] = v; else delete S.dvSel[key]; persist(); dvClose(); dvReanalyse(); }
+function dvOpen(key){
+  const a = (DV.R||{A:[]}).A.find(x=>x.key===key); if(!a) return; dvClose();
+  const m = document.createElement("div"); m.id = "dvModal"; m.dataset.key = key;
+  m.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px";
+  const cur = a.offs[0], inp = (id,l,ph,w) => '<label style="display:block;font-size:12px;margin-top:6px">'+l+'<input id="'+id+'" placeholder="'+(ph||"")+'" style="width:100%;padding:6px 8px;border:1px solid var(--bord);border-radius:6px;box-sizing:border-box;'+(w||"")+'"></label>';
+  let body = '<div style="font-size:13px;margin-bottom:8px">VLEP 8h : <b>'+esc(a.v8||"—")+'</b> · CAS '+esc(a.cas||"—")+(dvLabBase(a)?' · labo base : '+esc(dvLabBase(a)):'')+'</div>';
+  if(a.ex) body += '<div class="warn" style="margin:0 0 8px">'+esc(a.ex)+'</div>';
+  if(a.all.length){
+    body += '<b style="font-size:13px">Offres possibles ('+a.all.length+') — choisis celle à retenir</b><div style="overflow:auto;max-height:42vh;margin-top:6px"><table class="t"><thead><tr><th></th><th>Labo</th><th>Analyse</th><th>LQ</th><th>COFRAC</th><th>Support / prétraitement</th><th>Total HT</th></tr></thead><tbody>'+
+      a.all.slice(0,40).map((o,i)=>'<tr'+(cur===o?' style="background:#E8F4FB"':'')+'><td><button class="btn sm pri" data-dvpick="'+i+'" type="button">'+(cur===o&&!a.manual?'✓ Retenue':'Choisir')+'</button></td><td class="l">'+esc(o.lab)+'<span class="m">'+esc(o.src)+'</span></td><td class="l">'+esc(o.code+" – "+o.nom)+'</td><td>'+esc(o.lq)+'</td><td>'+(o.cofrac?"Oui":"Non")+'</td><td class="l">'+esc((o.sup?o.sup[1]:"—")+(o.pre?" + "+o.pre[1]:""))+'</td><td>'+dvEur(dvTotal(o))+'</td></tr>').join("")+'</tbody></table></div>';
+  } else body += '<div class="warn" style="margin:0 0 6px">Aucune offre dans les catalogues pour cet agent.</div>';
+  body += '<details'+(a.all.length?'':' open')+' style="margin-top:10px"><summary style="cursor:pointer;font-weight:650">J\'ai une solution (saisie manuelle)</summary><div style="display:grid;grid-template-columns:1fr 1fr;gap:0 10px">'+
+    inp("dvcLab","Laboratoire","ex : Eurofins, Carso…")+inp("dvcNom","Analyse / méthode","ex : dosage par HPLC")+inp("dvcCode","Code analyse","")+inp("dvcLq","LQ","ex : 0,5 µg/support")+
+    inp("dvcSup","Support de prélèvement","ex : tube charbon actif")+inp("dvcSupPrix","Prix support HT (€)","")+inp("dvcPre","Prétraitement","ex : désorption CS2")+inp("dvcPrePrix","Prix prétraitement HT (€)","")+inp("dvcPrix","Prix analyse HT (€)","")+
+    '<label style="font-size:12px;margin-top:22px"><input type="checkbox" id="dvcCofrac"> Accrédité COFRAC</label></div><div class="row" style="margin-top:8px"><button class="btn pri" data-dvsave="1" type="button">Retenir cette solution</button></div></details>';
+  body += '<div class="row" style="margin-top:12px"><button class="btn" data-dvskip="1" type="button">Écarter cet agent (aucune analyse retenue)</button>'+(a.sel?'<button class="btn" data-dvauto="1" type="button">Revenir au choix automatique</button>':'')+'<button class="btn" data-dvclose="1" type="button" style="margin-left:auto">Fermer</button></div>';
+  m.innerHTML = '<div style="background:#fff;color:#1b2a38;border-radius:12px;max-width:860px;width:100%;max-height:92vh;overflow:auto;padding:16px 18px;box-shadow:0 10px 40px rgba(0,0,0,.35)"><h2 style="margin:0 0 6px">'+esc(a.nom)+'</h2>'+body+'</div>';
+  document.body.appendChild(m);
+  if(a.sel && a.sel.t==="c"){ const c = a.sel.o; [["dvcLab","lab"],["dvcNom","nom"],["dvcCode","code"],["dvcLq","lq"],["dvcSup","sup"],["dvcSupPrix","supPrix"],["dvcPre","pre"],["dvcPrePrix","prePrix"],["dvcPrix","prix"]].forEach(([id,k])=>{ const e = document.getElementById(id); if(e) e.value = c[k]||""; }); const cb = document.getElementById("dvcCofrac"); if(cb) cb.checked = !!c.cofrac; }
+}
+document.addEventListener("click", e=>{
+  const m = document.getElementById("dvModal");
+  if(m){ const t = e.target, key = m.dataset.key, a = (DV.R||{A:[]}).A.find(x=>x.key===key);
+    if(t===m || t.closest("[data-dvclose]")){ dvClose(); return; }
+    const pk = t.closest("[data-dvpick]"); if(pk && a){ const o = a.all[+pk.dataset.dvpick]; dvSetSel(key, {t:"o", lab:o.lab, code:o.code, fam:o.famName||""}); return; }
+    if(t.closest("[data-dvskip]")){ dvSetSel(key, {t:"x"}); return; }
+    if(t.closest("[data-dvauto]")){ dvSetSel(key, null); return; }
+    if(t.closest("[data-dvsave]")){ const g = id => (document.getElementById(id)||{}).value||""; const o = {lab:g("dvcLab").trim(), nom:g("dvcNom").trim(), code:g("dvcCode").trim(), lq:g("dvcLq").trim(), sup:g("dvcSup").trim(), supPrix:g("dvcSupPrix").trim(), pre:g("dvcPre").trim(), prePrix:g("dvcPrePrix").trim(), prix:g("dvcPrix").trim(), cofrac:!!(document.getElementById("dvcCofrac")||{}).checked};
+      if(!o.lab && !o.nom){ alert("Indique au moins le laboratoire ou l\u2019analyse."); return; } dvSetSel(key, {t:"c", o}); return; }
+    return; }
+  const r = e.target.closest("#dvOut tr[data-dvk]"); if(r && !e.target.closest("button")) dvOpen(r.dataset.dvk);
+});
+document.addEventListener("keydown", e=>{ if(e.key==="Escape") dvClose(); });
 function dvLabs(){ return new Set($$("#dvLabs input:checked").map(i=>i.value)); }
 function dvRun(){
   const mode = ($$("input[name=dvSrc]").find(r=>r.checked)||{}).value || "proj"; let inp;
@@ -2877,7 +3007,7 @@ function dvRun(){
   else inp = dvInputProject(mode==="projc");
   if(!inp.length){ $("#dvMsg").innerHTML = '<div class="warn">Aucun agent à analyser : '+(mode==="paste"?"colle une liste (CAS ou noms, un par ligne).":"le projet ne contient encore ni agent retenu ni candidat.")+'</div>'; DV.ready = false; renderDevis(); return; }
   inp.forEach(x=>{ if(!x.gehs.length) x.gehs = []; });
-  try{ DV.R = dvAnalyse(inp, dvLabs()); DV.ready = true; $("#dvMsg").innerHTML = ""; renderDevis(); }
+  try{ DV.inp = inp; DV.R = dvAnalyse(inp, dvLabs()); DV.ready = true; $("#dvMsg").innerHTML = ""; renderDevis(); }
   catch(e){ $("#dvMsg").innerHTML = '<div class="warn">Erreur d\'analyse : '+esc(e.message)+'</div>'; }
 }
 (function(){

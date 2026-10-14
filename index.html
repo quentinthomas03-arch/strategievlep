@@ -697,7 +697,16 @@ function sortedIdx(){
   return S.agents.map((a,i)=>i).sort((x,y)=>norm(S.agents[x].agent).localeCompare(norm(S.agents[y].agent),"fr"));
 }
 /* agent sans laboratoire dans la base : écarté de l'étude, sauf demande du client (l'onglet Faisabilité reste disponible pour chercher une offre) */
-function noLab(a){ return !!a && !a.keepNoLab && !String(a.labo||"").trim(); }
+const hasSol = a => { const sl = (S.dvSel||{})[a.cas || norm(a.agent)]; return !!(sl && (sl.t==="o" || sl.t==="c")); };
+function noLab(a){ return !!a && !a.keepNoLab && !String(a.labo||"").trim() && !hasSol(a); }
+/* après tout changement de labo / solution / conservation : retire des plan les agents écartés et recalcule les phrases automatiques */
+function syncStrategy(){
+  _acdC.clear();
+  const out = new Set(S.agents.filter(noLab).map(a=>a.uid));
+  if(out.size && S.plan){ S.plan.forEach(r=>{ if(r.ag) r.ag = r.ag.filter(x=>!out.has(x)); }); S.plan = S.plan.filter(r=>r.kind!=="row" || (r.ag&&r.ag.length) || (r.agTxt||"").trim()); }
+  if((S.just||[]).some(j=>j.auto && !j.edited)){ S.just = S.just.filter(j=>!j.auto || j.edited); try{ genJust(); }catch(e){} }
+  persist(); try{ renderSel(); }catch(e){} try{ renderGeh(); }catch(e){} try{ renderPlan(); }catch(e){} try{ renderJust(); }catch(e){}
+}
 function isAcc(a){ return a.accP==="X" && a.accA==="X"; }
 function renderSel(){
   const n = S.agents.length, hors = S.agents.filter(a=>!isAcc(a)).length, cmr = S.agents.filter(a=>a.cmr).length;
@@ -713,7 +722,7 @@ function renderSel(){
     (hors?'<div class="warn"><b>'+hors+' agent(s) hors accréditation</b> (liseré orange) : décision à prendre — méthode générique, sous-traitance ou développement. Indique-le dans la remarque de l\'agent hors base ou dans ton plan.</div>':'');
 }
 $("#selWrap").addEventListener("click", e=>{ const b=e.target.closest("[data-rm]"); if(b) removeAgent(+b.dataset.rm);
-  const k = e.target.closest("[data-keep]"); if(k){ e.preventDefault(); const a = S.agents[+k.dataset.keep]; if(a.keepNoLab) delete a.keepNoLab; else a.keepNoLab = true; persist(); renderSel(); } });
+  const k = e.target.closest("[data-keep]"); if(k){ e.preventDefault(); const a = S.agents[+k.dataset.keep]; if(a.keepNoLab) delete a.keepNoLab; else a.keepNoLab = true; syncStrategy(); } });
 
 /* synonymes courants (nom collé -> nom en base) */
 const ALIAS = {"chlorure d hydrogene":"acide chlorhydrique","azoture de sodium":"azide de sodium","soude":"hydroxyde de sodium","soude caustique":"hydroxyde de sodium","potasse":"hydroxyde de potassium","ethanol 70":"ethanol","alcool ethylique":"ethanol"};
@@ -1108,7 +1117,8 @@ $("#bCandAll").onclick = ()=>{ S.cand.forEach((c,i)=>{ if(candOK(c) && c.refs.le
 $("#bCandHors").onclick = ()=>{ S.cand.forEach((c,i)=>{ if(candOK(c) && (!c.emis || c.refs.length)) addCand(i); }); renderCand(); renderSel(); renderList(); };
 
 /* ================= GEH & tâches ================= */
-function gehList(){ let n=0; const out=[]; S.ateliers.forEach(a=>a.gehs.forEach(g=>{ n++; out.push({id:g.id,n,des:g.des||"",eff:g.eff||"",atelier:a.nom||"",label:n+" - "+(g.des||"(sans nom)")}); })); return out; }
+const gehActive = g => mergedTasks(g).some(k=>k.ags.length);
+function gehList(){ let n=0; const out=[]; S.ateliers.forEach(a=>a.gehs.forEach(g=>{ if(!gehActive(g)) return; n++; out.push({id:g.id,n,des:g.des||"",eff:g.eff||"",atelier:a.nom||"",label:n+" - "+(g.des||"(sans nom)")}); })); return out; }
 const gehLabel = id => { const g = gehList().find(x=>x.id===id); return g ? g.label : ""; };
 function renderGeh(){
   let n = 0;
@@ -1792,7 +1802,7 @@ function fillAteliers(xml){
   const st = xml.lastIndexOf("<w:tbl>", i), en = xml.indexOf("</w:tbl>", i)+8, t = xml.slice(st,en);
   const rs = rows_of(t); if(rs.length<2) return xml;
   const tpl = rs[1][0], tcs = tpl.match(/<w:tc>[\s\S]*?<\/w:tc>/g); if(!tcs || tcs.length<2) return xml;
-  const body = S.ateliers.map((a,k)=>{
+  const body = S.ateliers.filter(a=>a.gehs.some(gehActive)).map((a,k)=>{
     let c0 = tcs[0].replace(/<w:t>[^<]*<\/w:t>/, '<w:t>'+(k+1)+'</w:t>');
     const ps = tcs[1].match(/<w:p[ >][\s\S]*?<\/w:p>/g)[0];
     const c1 = tcs[1].replace(/<w:p[ >][\s\S]*<\/w:p>/, ps.replace(/<\/w:pPr>/, '</w:pPr><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t xml:space="preserve">'+esc(a.nom||"")+'</w:t></w:r>'));
@@ -1817,11 +1827,12 @@ function fillGeh(xml){
   const start = (ps>=0 && textOf(pre.slice(ps)).trim()) ? ps : gt[0][0];
   const end = gt[gt.length-1][1];
   let n = 0, out = "";
-  S.ateliers.forEach((a,ai)=>{
-    out += '<w:p><w:pPr><w:keepNext/><w:spacing w:before="120" w:after="120"/><w:rPr><w:b/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr><w:t xml:space="preserve">'+esc((ai+1)+" – "+(a.nom||""))+'</w:t></w:r></w:p>';
-    a.gehs.forEach(g=>{
+  let ai2 = 0; S.ateliers.forEach((a,ai)=>{
+    if(!a.gehs.some(gehActive)) return; ai2++;
+    out += '<w:p><w:pPr><w:keepNext/><w:spacing w:before="120" w:after="120"/><w:rPr><w:b/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr><w:t xml:space="preserve">'+esc(ai2+" – "+(a.nom||""))+'</w:t></w:r></w:p>';
+    a.gehs.filter(gehActive).forEach(g=>{
       let t = '<w:tbl>'+head+rs[0][0].replace(/<w:pPr>(<w:pStyle [^>]*\/>)?/g,(m,ps)=>'<w:pPr>'+(ps||'')+'<w:keepNext/>');
-      n++; const L = (g.taches.length && mergedTasks(g).length) ? mergedTasks(g) : [{t:"",dur:[],frq:[],prods:[],ags:[]}];
+      n++; const L = mergedTasks(g);
       L.forEach((k,i)=>{
         const vm = i===0 ? "restart" : "cont", first = i===0;
         t += '<w:tr><w:trPr><w:trHeight w:val="298"/></w:trPr>'+
@@ -2966,7 +2977,7 @@ const DV_STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><style
 /* ---- fenêtre de choix par agent (agents à vérifier / non trouvés) ---- */
 function dvReanalyse(){ if(!DV.inp) return; DV.R = dvAnalyse(DV.inp, dvLabs()); renderDevis(); }
 function dvClose(){ const m = document.getElementById("dvModal"); if(m) m.remove(); }
-function dvSetSel(key, v){ S.dvSel = S.dvSel||{}; if(v) S.dvSel[key] = v; else delete S.dvSel[key]; persist(); dvClose(); dvReanalyse(); }
+function dvSetSel(key, v){ S.dvSel = S.dvSel||{}; if(v) S.dvSel[key] = v; else delete S.dvSel[key]; persist(); dvClose(); dvReanalyse(); syncStrategy(); }
 function dvOpen(key){
   const a = (DV.R||{A:[]}).A.find(x=>x.key===key); if(!a) return; dvClose();
   const m = document.createElement("div"); m.id = "dvModal"; m.dataset.key = key;

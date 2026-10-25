@@ -1,10 +1,10 @@
 "use strict";
-/* ================= Relecture experte (IA) ================= */
-/* Claude relit la stratégie complète comme un auditeur Cofrac. Il reçoit un dossier JSON (anonymisé par défaut) qui contient
-   la stratégie ET l'analyse déjà faite par le moteur de règles (raisons et alertes sourcées), plus le référentiel en système.
+/* ================= Relecture experte (IA, sans API payante) ================= */
+/* Claude relit la stratégie complète comme un auditeur Cofrac. L'appli exporte un fichier de relecture (consignes, référentiel,
+   format de réponse, dossier anonymisé par défaut avec l'analyse du moteur) ; Quentin le transmet à Claude (Claude Code ou
+   claude.ai, dans son abonnement) ; la réponse JSON se réimporte ici pour être lue. Aucun appel réseau depuis l'appli.
    Le moteur garde la main sur ce que disent les textes ; l'IA cherche ce qu'un moteur de règles ne voit pas. Le technicien tranche. */
-const RELECT_MODELE = "claude-opus-5-5";
-const RELECT_CLE = "vlep-relecteur-cle";   /* clé API : sur ce poste seulement (localStorage), jamais dans le dossier */
+const RELECT_FORMAT = "relecture-strategie-vlep/1";
 
 const RELECT_SCHEMA = {
   type: "object", additionalProperties: false, required: ["verdict", "synthese", "constats", "questions_visite"],
@@ -87,39 +87,27 @@ function dossierRelecture(anonyme){
   };
 }
 
-/* ---- appel à Claude (SDK officiel, chargé à la demande) ---- */
-let ANTHROPIC_CLASSE = null;
-async function chargerSdkAnthropic(){
-  if(ANTHROPIC_CLASSE) return ANTHROPIC_CLASSE;
-  const url = URL.createObjectURL(new Blob([ANTHROPIC_SDK.source], {type:"text/javascript"}));
-  ANTHROPIC_CLASSE = (await import(url)).default; return ANTHROPIC_CLASSE;
+/* ---- fichier de relecture à transmettre à Claude ---- */
+function fichierRelecture(anonyme){
+  return {format: RELECT_FORMAT, cree_le: new Date().toISOString(), anonymise: !!anonyme,
+    consignes: relectSysteme(),
+    reponse_attendue: "Réponds uniquement par un objet JSON conforme au schéma « schema_reponse » (pas de texte autour), en français. Il sera réimporté dans l’appli Stratégie VLEP.",
+    schema_reponse: RELECT_SCHEMA,
+    dossier: dossierRelecture(anonyme)};
 }
-async function lancerRelecture(apiKey, anonyme){
-  const Anthropic = await chargerSdkAnthropic();
-  const client = new Anthropic({apiKey, dangerouslyAllowBrowser: true});
-  const dossier = dossierRelecture(anonyme);
-  const stream = client.beta.messages.stream({
-    model: RELECT_MODELE, max_tokens: 32000,
-    betas: ["server-side-fallback-2026-07-01"], fallbacks: "default",   /* refus de sécurité : relance automatique sur un autre modèle */
-    thinking: {type: "adaptive"},
-    output_config: {effort: "high", format: {type: "json_schema", schema: RELECT_SCHEMA}},
-    system: [{type: "text", text: relectSysteme(), cache_control: {type: "ephemeral"}}],
-    messages: [{role: "user", content: "Dossier de la stratégie à relire (JSON) :\n\n"+JSON.stringify(dossier, null, 1)}]
-  });
-  const msg = await stream.finalMessage();
-  if(msg.stop_reason==="refusal") throw new Error("le modèle a refusé la demande"+(msg.stop_details && msg.stop_details.category ? " ("+msg.stop_details.category+")" : ""));
-  if(msg.stop_reason==="max_tokens") throw new Error("réponse tronquée (limite de longueur atteinte)");
-  const txt = msg.content.filter(b=>b.type==="text").map(b=>b.text).join("");
-  return {date: new Date().toISOString(), modele: msg.model, anonyme, resultat: JSON.parse(txt),
-    usage: {entree: msg.usage.input_tokens, cache_lu: msg.usage.cache_read_input_tokens||0, sortie: msg.usage.output_tokens}};
+/* texte à coller dans claude.ai : consignes + schéma + dossier */
+function texteRelecture(anonyme){
+  const f = fichierRelecture(anonyme);
+  return f.consignes+"\n\n"+f.reponse_attendue+"\n\nSchéma de la réponse :\n"+JSON.stringify(f.schema_reponse)+"\n\nDossier de la stratégie à relire (JSON) :\n\n"+JSON.stringify(f.dossier, null, 1);
 }
-function messageErreurApi(err, Anthropic){
-  if(Anthropic && err instanceof Anthropic.AuthenticationError) return "clé API refusée : vérifie-la";
-  if(Anthropic && err instanceof Anthropic.PermissionDeniedError) return "cette clé n’a pas accès au modèle "+RELECT_MODELE;
-  if(Anthropic && err instanceof Anthropic.RateLimitError) return "trop de requêtes : réessaie dans une minute";
-  if(Anthropic && err instanceof Anthropic.APIConnectionError) return "connexion impossible à l’API (réseau, proxy de l’entreprise ?)";
-  if(Anthropic && err instanceof Anthropic.APIError) return "erreur de l’API ("+err.status+") : "+err.message;
-  return err && err.message ? err.message : String(err);
+/* réponse de Claude réimportée : JSON brut, éventuellement entouré de texte ou d'un bloc ```json */
+function lireReponseRelecture(texte){
+  const t = String(texte||""), d = t.indexOf("{"), f = t.lastIndexOf("}");
+  if(d<0 || f<d) throw new Error("aucun objet JSON trouvé dans la réponse");
+  const r = JSON.parse(t.slice(d, f+1));
+  if(!["conforme","à reprendre","non conforme"].includes(r.verdict) || !Array.isArray(r.constats)) throw new Error("ce n’est pas une réponse de relecture (verdict ou constats manquants)");
+  r.constats = r.constats.filter(c=>c && c.constat); r.questions_visite = Array.isArray(r.questions_visite) ? r.questions_visite : [];
+  return r;
 }
 
 /* ---- affichage ---- */
@@ -131,35 +119,38 @@ function relectureHtml(R){
   const groupe = ([g,lbl]) => { const L = (r.constats||[]).filter(c=>c.gravite===g); if(!L.length) return "";
     return '<h3 style="margin:12px 0 4px">'+esc(lbl)+' ('+L.length+')</h3><ul class="relect">'+L.map(c=>'<li><b>'+esc(c.cible)+'</b> — '+esc(c.constat)+
       '<div class="legend" style="margin:2px 0 0">Pourquoi : '+esc(c.pourquoi)+' <i>('+esc(c.source)+')</i></div><div style="margin:2px 0 0">→ '+esc(c.correction)+
-      ' <button class="btn sm" data-goto="'+(RELECT_ONGLET[c.theme]||"plan")+'">'+esc(c.theme)+'</button></div></li>').join("")+'</ul>'; };
-  return '<div class="'+cls+'"><b>Verdict : '+esc(r.verdict)+'</b> — '+esc(r.synthese)+'</div>'+RELECT_GRAV.map(groupe).join("")+
+      ' <button class="btn sm" data-goto="'+(RELECT_ONGLET[c.theme]||"plan")+'">'+esc(c.theme||"voir")+'</button></div></li>').join("")+'</ul>'; };
+  return '<div class="'+cls+'"><b>Verdict : '+esc(r.verdict)+'</b> — '+esc(r.synthese||"")+'</div>'+RELECT_GRAV.map(groupe).join("")+
     ((r.questions_visite||[]).length ? '<h3 style="margin:12px 0 4px">Questions à poser</h3><ul>'+r.questions_visite.map(q=>'<li>'+esc(q)+'</li>').join("")+'</ul>' : '')+
-    '<div class="legend">Relu le '+esc(fmtDT(Date.parse(R.date)))+' par '+esc(R.modele)+(R.anonyme ? ', dossier anonymisé' : ', dossier non anonymisé')+
-    (R.usage ? ' · '+R.usage.entree+' jetons en entrée ('+R.usage.cache_lu+' lus en cache), '+R.usage.sortie+' en sortie' : '')+'. L’IA propose, tu tranches : rien n’est modifié dans la stratégie.</div>';
+    '<div class="legend">Relecture importée le '+esc(fmtDT(Date.parse(R.date)))+'. L’IA propose, tu tranches : rien n’est modifié dans la stratégie.</div>';
 }
-function lireCle(){ try{ return localStorage.getItem(RELECT_CLE)||""; }catch(e){ return ""; } }
 function renderRelecture(){
-  const W = $("#relecture"); if(!W) return; const cle = lireCle();
+  const W = $("#relecture"); if(!W) return;
   W.innerHTML = '<h2>Relecture experte (IA)</h2>'+
-    '<p style="margin-top:0">Claude ('+RELECT_MODELE+') relit la stratégie complète comme un auditeur Cofrac, en s’appuyant sur le moteur de règles et le référentiel, et dit ce qui ne tient pas. Il ne modifie rien.</p>'+
-    '<div class="warn" style="margin:6px 0">Le dossier est envoyé à l’API d’Anthropic. Ne lance la relecture que si SOCOTEC autorise ce service pour ces données. Anonymisation : nom, adresse, SIRET, contact, n° d’affaire et référence de l’ERC sont masqués ; les notes libres et les noms de produits restent tels quels.</div>'+
+    '<p style="margin-top:0">Claude relit la stratégie complète comme un auditeur Cofrac, en s’appuyant sur le moteur de règles et le référentiel, et dit ce qui ne tient pas. Gratuit : la relecture passe par ton abonnement Claude, l’appli n’envoie rien elle-même.</p>'+
+    '<ol style="margin:4px 0 8px 18px;padding:0;font-size:13.5px">'+
+      '<li><b>Exporte</b> le fichier de relecture (bouton ci-dessous) : il arrive dans tes Téléchargements.</li>'+
+      '<li><b>Dépose-le</b> dans le dossier <code>Desktop\\APPLI\\Stratégie\\dossiers-reels</code>.</li>'+
+      '<li>Dans <b>Claude Code</b>, écris : « relis la stratégie » suivi du nom du fichier. Claude te répond et enregistre sa réponse à côté, dans un fichier <code>…-reponse.json</code>.</li>'+
+      '<li><b>Importe</b> ce fichier réponse ici pour lire la relecture classée par gravité, avec un lien vers chaque onglet.</li></ol>'+
+    '<div class="legend" style="margin:0 0 8px">Sans Claude Code : « Copier pour claude.ai », colle dans une conversation, puis copie la réponse et importe-la avec « Coller une réponse ».</div>'+
     '<div class="row" style="flex-wrap:wrap;gap:6px;align-items:center">'+
-      '<input id="relCle" type="password" autocomplete="off" placeholder="'+(cle ? 'clé API enregistrée sur ce poste' : 'clé API Anthropic (sk-ant-…)')+'" style="min-width:260px">'+
-      '<button class="btn sm" id="relCleSave">Enregistrer la clé sur ce poste</button>'+(cle ? '<button class="btn sm" id="relCleDel">Oublier la clé</button>' : '')+
+      '<button class="btn pri" id="relExport">Exporter le fichier de relecture</button>'+
+      '<label class="btn" style="font-weight:400">Importer la réponse…<input type="file" id="relImport" accept=".json,.txt" class="hide"></label>'+
+      '<button class="btn" id="relCopie">Copier pour claude.ai</button><button class="btn" id="relColle">Coller une réponse</button><button class="btn" id="relVoir">Voir le dossier</button>'+
       '<label style="font-size:13px"><input type="checkbox" id="relAnon" checked> anonymiser</label>'+
-    '</div><div class="row" style="margin-top:6px;gap:6px">'+
-      '<button class="btn pri" id="relGo">Lancer la relecture</button><button class="btn" id="relVoir">Voir ce qui sera envoyé</button><button class="btn" id="relCopie">Copier pour une autre IA</button>'+
-    '</div><div id="relMsg" style="margin-top:6px;font-size:13px"></div><div id="relRes">'+relectureHtml(S.relecture)+'</div>';
-  $("#relCleSave").onclick = ()=>{ const v = $("#relCle").value.trim(); if(!v) return; try{ localStorage.setItem(RELECT_CLE, v); }catch(e){} renderRelecture(); };
-  if($("#relCleDel")) $("#relCleDel").onclick = ()=>{ try{ localStorage.removeItem(RELECT_CLE); }catch(e){} renderRelecture(); };
-  $("#relVoir").onclick = ()=>{ $("#relMsg").innerHTML = '<details open><summary>Dossier envoyé ('+($("#relAnon").checked ? "anonymisé" : "non anonymisé")+')</summary><pre style="max-height:320px;overflow:auto;font-size:11px;white-space:pre-wrap">'+esc(JSON.stringify(dossierRelecture($("#relAnon").checked), null, 1))+'</pre></details>'; };
-  $("#relCopie").onclick = async ()=>{ const t = relectSysteme()+"\n\nRéponds en JSON selon ce schéma :\n"+JSON.stringify(RELECT_SCHEMA)+"\n\nDossier de la stratégie à relire (JSON) :\n\n"+JSON.stringify(dossierRelecture($("#relAnon").checked), null, 1);
-    try{ await navigator.clipboard.writeText(t); $("#relMsg").textContent = "Consignes et dossier copiés : colle-les dans l’outil d’IA autorisé par SOCOTEC."; }catch(e){ $("#relMsg").textContent = "Copie bloquée par le navigateur."; } };
-  $("#relGo").onclick = async ()=>{
-    const k = $("#relCle").value.trim() || lireCle(); if(!k){ $("#relMsg").textContent = "Renseigne d’abord une clé API."; return; }
-    if(!S.plan.some(r=>r.kind!=="sec")){ $("#relMsg").textContent = "Le plan est vide : génère d’abord la stratégie."; return; }
-    const b = $("#relGo"); b.disabled = true; $("#relMsg").textContent = "Relecture en cours (une à plusieurs minutes)…";
-    try{ S.relecture = await lancerRelecture(k, $("#relAnon").checked); persist(); renderRelecture(); }
-    catch(err){ $("#relMsg").textContent = "Relecture impossible : "+messageErreurApi(err, ANTHROPIC_CLASSE); b.disabled = false; }
-  };
+    '</div><div class="legend" style="margin-top:4px">Anonymisation : nom, adresse, SIRET, contact, n° d’affaire et référence de l’ERC masqués ; les notes libres et les noms de produits restent tels quels.</div>'+
+    '<div id="relMsg" style="margin-top:6px;font-size:13px"></div><div id="relRes">'+relectureHtml(S.relecture)+'</div>';
+  const anon = () => $("#relAnon").checked, msg = h => { $("#relMsg").innerHTML = h; };
+  const importer = texte => { try{ S.relecture = {date:new Date().toISOString(), resultat: lireReponseRelecture(texte)}; persist(); renderRelecture(); $("#relMsg").innerHTML = '<div class="ok">Relecture importée.</div>'; }
+    catch(e){ msg('<div class="warn">Import impossible : '+esc(e.message)+'</div>'); } };
+  $("#relExport").onclick = ()=>{
+    if(!S.plan.some(r=>r.kind!=="sec")) return msg('<div class="warn">Le plan est vide : génère d’abord la stratégie.</div>');
+    const nom = "relecture_"+safe(anon() ? "dossier" : S.ent.nom)+"_"+today()+".json";
+    download(new Blob([JSON.stringify(fichierRelecture(anon()), null, 1)], {type:"application/json"}), nom);
+    msg('<div class="ok">Fichier <b>'+esc(nom)+'</b> exporté. Dépose-le dans <code>Desktop\\APPLI\\Stratégie\\dossiers-reels</code>, puis écris dans Claude Code : « relis la stratégie '+esc(nom)+' ».</div>'); };
+  $("#relImport").addEventListener("change", async e=>{ const f = e.target.files[0]; e.target.value = ""; if(f) importer(await f.text()); });
+  $("#relCopie").onclick = async ()=>{ try{ await navigator.clipboard.writeText(texteRelecture(anon())); msg("Consignes et dossier copiés : colle-les dans une conversation sur claude.ai, puis reviens coller sa réponse avec « Coller une réponse »."); }catch(e){ msg("Copie bloquée par le navigateur."); } };
+  $("#relColle").onclick = ()=>{ msg('<textarea id="relTxt" rows="6" style="width:100%" placeholder="Colle ici la réponse JSON de Claude"></textarea><button class="btn sm" id="relTxtOk" style="margin-top:4px">Importer</button>'); $("#relTxtOk").onclick = ()=>importer($("#relTxt").value); };
+  $("#relVoir").onclick = ()=>{ msg('<details open><summary>Dossier exporté ('+(anon() ? "anonymisé" : "non anonymisé")+')</summary><pre style="max-height:320px;overflow:auto;font-size:11px;white-space:pre-wrap">'+esc(JSON.stringify(dossierRelecture(anon()), null, 1))+'</pre></details>'); };
 }

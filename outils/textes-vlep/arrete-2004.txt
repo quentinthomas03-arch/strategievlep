@@ -1,0 +1,75 @@
+Acétate de 3-pentyle||620-11-1|270|50||540|100||-|
+Acide bromhydrique|233-113-0|10035-10-6|-|-||6,7|2||-|
+Acide acétique|200-580-7|64-19-7|25|10|-|50|20|-|-|-
+Acide arsénique et ses sels, ainsi que ses composés inorganiques (fraction inhalable)|-|-|0,01|-|-|-|-|-|-|Entre en vigueur le 1er janvier 2022. Pour le secteur de la fusion du cuivre, la valeur limite s'applique à partir du 11 juillet 2023.
+Acide acrylique|201-177-9|79-10-7|29|10|-|59 (9)|20 (9)|-|-|-
+Acide formique|200-579-1|64-18-6|9|5||-|-||-|
+Acide nitrique|231-714-2|7697-37-2|-|-||2,6|1||-|
+Acide phosphorique|231-633-2|7664-38-2|1|0,2||2|0,5||-|
+Acide propionique|201-176-3|79-09-4|31|10||62|20||-|
+Acide oxalique|205-634-3|144-62-7|1|-||-|-||-|
+Acide sulfurique (fraction thoracique)|231-639-5|7664-93-9|0,05||||-|||
+Acroléine|203-453-4|107-02-8|0,05|0,02|-|0,12|0,05|-|-|-
+Acrylate de n-butyle|205-480-7|141-32-2|11|2||53|10||-|
+Alcool allylique|203-470-7|107-18-6|0,48|0,2||4,8|2||Peau (7)|
+Amitrole|200-521-5|61-82-5|0,2|-|-|-|-|-|-|-
+4-aminotoluène|203-403-1|106-49-0|4,46|1|-|8,92|2|-|Peau (7)|Entre en vigueur le 1er janvier 2022.
+Amylacétate, tert||625-16-1|270|50||540|100||-|
+Aniline (10)|200-539-3|62-53-3|7,74|2|-|19,35|5|-|Peau (7)|Entre en vigueur le 1er janvier 2022.
+Argent (composés solubles en Ag)|231-131-3|-|0,01|-||-|-||-|
+Argent métallique|231-131-3|7440-22-4|0,1|-||-|-||-|
+Baryum (composés solubles)|-|-|0,5|-||-|-||-|
+But-2-yne-1,4-diol|203-788-6|110-65-6|0,5|-|-|-|-|-|-|-
+2-(2-butoxyéthoxy)éthanol|203-961-6|112-34-5|67,5|10||101,2|15||-|
+Calcium (dihydroxyde de) fraction alvéolaire|215-137-3|1305-62-0|1|-|-|4|-|-|-|-
+Calcium (oxyde de) fraction alvéolaire|215-138-9|1305-78-8|1|-|-|4|-|-|-|-
+e-caprolactame (poudre et vapeur)|203-313-2|105-60-2|10|-||40|-||-|
+Chlorodifluorométhane|200-871-9|75-45-6|3600|1000||-|-||-|
+Chloroéthane|200-830-5|75-00-3|268|100||-|-||-|
+Chlorométhane|200-817-4|74-87-3|42|20|-|-|-|-|-|Entre en vigueur le 1er janvier 2022.
+Cyanamide|206-992-3|420-04-2|1|0,58||-|-||Peau (7)|
+Diacétyle|207-069-8|431-03-8|0,07|0,02|-|0,36|0,1|-|-|-
+1,4-dichlorobenzène|203-400-5|106-46-7|4,5|0,75||306|50||-|
+1,1-dichloroéthane|200-863-5|75-34-3|412|100||-|-||Peau (7)|
+Dibromure d'éthylène|203-444-5|106-93-4|0,8|0,1|-|-|-|-|Peau (7)|-
+Dioxyde de carbone|204-696-9|124-38-9|9 000|5 000||-|-||-|
+Diisocyanates Exprimés en NCO (13)|-|-|0,01|-|-|0,02|-|-|Peau (7) Sensibilisation cutanée (11) et respiratoire (12)|Entre vigueur le 9 avril 2026
+Ether diphénylique|202-981-2|101-84-8|7|1|-|14|2|-|-|-
+Ethylène-glycol|203-473-3|107-21-1|52|20||104|40||Peau (7)|
+2-Ethylhexan-1-ol|203-234-3|104-76-7|5,4|1|-|-|-|-|-|-
+Fluor|231-954-8|7782-41-4|1,58|1||3,16|2||-|
+Fluorures inorganiques|||2,5|-||-|-||-|
+Formiate de méthyle|203-481-7|107-31-3|125|50|-|250|100|-|Peau (7)|-
+Isopentane|201-142-8|78-78-4|3 000|1 000||-|-||-|
+Lithium (hydrure de) fraction inhalable|231-484-3|7580-67-8|-|-|-|0,02|-|-|-|-
+Manganèse et ses composés fraction alvéolaire exprimé en manganèse|-|-|0,05|-|-|-|-|-|-|-
+Manganèse et ses composés fraction inhalable exprimé en manganèse|-|-|0,2|-|-|-|-|-|-|-
+Métal chrome, composés de chrome inorganiques (II) et composés de chrome inorganiques (insolubles) (III)|-|-|2|-||-|-||-|
+Mésitylène (triméthylbenzènes)|203-604-4|108-67-8|100|20||-|-||-|
+2-(2-méthoxyethoxy)éthanol|203-906-6|111-77-3|50,1|10||-|-||Peau (7)|
+4,4 ′-Méthylènedianiline|202-974-4|101-77-9|0,08|-|-|-|-|-|Peau (7)|-
+4,4 ′-méthylènebis (2-chloroaniline) (MOCA) (fraction inhalable)|202-918-9|101-14-4|0,01|-|-|-|-|-|Peau (7)|Entre en vigueur le 1er janvier 2022.
+5-méthylhexane-2-one|203-737-8|110-12-3|95|20||475|100||Peau (7)|
+5-méthylheptane-3-one|208-793-7|541-85-5|53|10||107|20||-|
+N-méthyle-2-pyrrolidone|212-828-1|872-50-4|40|10||80|20||Peau (7)|
+Néopentane|207-343-7|463-82-1|3 000|1 000||-|-||-|
+Nicotine|200-193-3|54-11-5|0,5|-||-|-||Peau (7)|
+Nitrobenzène|202-716-0|98-95-3|1|0,2||-|-||Peau (7)|
+Nitroéthane|201-188-9|79-24-3|62|20|-|312|100|-|Peau (7)|-
+Orthosilicate de tétraéthyle|201-083-8|78-10-4|44|5|-|-|-|-|-|-
+Oxyde de diméthyle|204-065-8|115-10-6|1920|1000||-|-||-|
+Pentaoxyde de disphosphore|215-236-1|1314-56-3|1|-||-|-||-|
+Pentasulfure de disphosphore|215-242-4|1314-80-3|1|-||-|-||-|
+2-phénylpropène|202-705-0|98-83-9|123|25||492|100||Peau (7)|
+Phosphine|232-260-8|7803-51-2|-|-||0,28|0,2||-|
+Pipérazine (poudre et vapeur)|203-808-3|110-85-0|0,1|-||0,3|-||-|
+Potassium (cyanure de) exprimé en cyanure|205-792-3|151-50-8|1|-|-|5|-|-|Peau (7)|-
+Pyrèthre (après suppression des lactones sensibilisantes)|-|8003-34-7|1|-||-|-||-|
+Résorcinol|203-585-2|108-46-3|45|10||-|-||Peau (7)|
+Séléniure de dihydrogène|231-978-9|7783-07-5|0,07|0,02||0,17|0,05||-|
+Sodium (cyanure de) exprimé en cyanure|205-599-4|143-33-9|1|-|-|5|-|-|Peau (7)|-
+Soufre (dioxyde de)|231-195-2|7446-09-5|1,3|0,5|-|2,7|1|-|-|-
+Styrène|202-851-5|100-42-5|100|23,3||200|46,6||Peau (7) Bruit (8)|
+Terphényle hydrogéné|262-967-7|61788-32-7|19|2|-|48|5|-|-|-
+Trinitrate de glycérol|200-240-8|55-63-0|0,095|0,01|-|0,19|0,02|-|Peau (7)|-
+Trichlorure de phosphoryle|233-046-7|10025-87-3|0,064|0,01|-|0,12|0,02|-|-|Entre en vigueur le 1er janvier 2022.

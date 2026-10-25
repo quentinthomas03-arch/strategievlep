@@ -242,3 +242,64 @@ table.t tr.whyrow td{border-top:0;padding:0 8px 6px;background:transparent;text-
 /* relecture experte */
 ul.relect{margin:0;padding:0 0 0 18px}
 ul.relect li{margin:0 0 8px}
+/* ================= Charte des applis VLEP / Aération : accueil « missions » et étapes ================= */
+:root{ --bleu-fonce:#005499; --primaire:#0082DE; --primaire-pale:#E1F1FC; --ombre-carte:0 1px 8px rgba(12,18,32,.06),0 0 1px rgba(12,18,32,.08); }
+body{font-family:"Inter","Segoe UI",Arial,sans-serif;background:#EEF1F5}
+.top{background:linear-gradient(135deg,#0082DE 0%,#005499 100%)}
+.mtitre h1{font-size:17px;margin:0;font-weight:700;max-width:46vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mtitre .sub{opacity:.85;font-size:12px}
+.card{border-radius:16px;border:1px solid rgba(12,18,32,.07);box-shadow:var(--ombre-carte)}
+/* vue accueil : seule la liste des missions est affichée */
+#accueil{display:none;max-width:760px;margin:0 auto;padding:16px}
+body.vue-accueil #accueil{display:block}
+body.vue-accueil .top, body.vue-accueil #etapes, body.vue-accueil #tabs, body.vue-accueil main, body.vue-accueil #fieldBar{display:none!important}
+.acc-hero{border-radius:16px;padding:18px 16px;color:#fff;background:linear-gradient(135deg,#0082DE 0%,#005499 100%);margin-bottom:10px;position:relative;overflow:hidden}
+.acc-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,rgba(255,255,255,.16) 0%,rgba(255,255,255,0) 38%);pointer-events:none}
+.acc-hero h1{font-size:24px;margin:2px 0;font-weight:700}
+.acc-kicker{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.9}
+.acc-sous{font-size:13px;opacity:.9}
+.acc-reprendre{background:#fff;border-radius:16px;padding:14px 16px;margin-bottom:10px;box-shadow:var(--ombre-carte);border:1px solid rgba(12,18,32,.07);border-left:4px solid var(--primaire)}
+.acc-reprendre .acc-kicker{color:var(--primaire);opacity:1}
+.acc-r-titre{font-size:16px;font-weight:700;margin:2px 0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acc-r-btns{display:flex;gap:8px;margin-top:10px}
+.acc-r-btns .btn{flex:1}
+.acc-etapes{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}
+.acc-etape,#etapes button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:12px 4px 10px;background:linear-gradient(180deg,#fff 0%,#eef1f5 100%);border:1px solid rgba(12,18,32,.08);border-radius:14px;cursor:pointer;font:inherit;color:inherit}
+.acc-etape em,#etapes em{font-style:normal;font-family:"Space Grotesk","Inter",sans-serif;font-size:26px;font-weight:700;line-height:1;color:#b9c3d1;text-shadow:0 1px 0 #fff,0 -1px 0 rgba(12,18,32,.15)}
+.acc-etape span,#etapes span{font-size:13px;font-weight:700}
+.acc-etape small,#etapes small{font-size:11px;color:var(--mut);text-align:center}
+.acc-etape.on,#etapes button.on{border-color:var(--primaire);box-shadow:0 0 0 2px var(--primaire-pale)}
+.acc-etape.on em,#etapes button.on em{color:var(--primaire)}
+.acc-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.acc-actions .btn{padding:10px;border-radius:12px}
+.acc-q{width:100%;padding:10px 12px;border:1px solid rgba(12,18,32,.12);border-radius:12px;margin-bottom:10px;background:#fff}
+.acc-liste{display:flex;flex-direction:column;gap:8px}
+.acc-mission{display:block;text-align:left;background:#fff;border:1px solid rgba(12,18,32,.07);border-radius:14px;padding:12px 14px;box-shadow:var(--ombre-carte);cursor:pointer;font:inherit;color:inherit;width:100%}
+.acc-mission:hover{border-color:var(--primaire)}
+.acc-m-tete{display:flex;gap:8px;align-items:baseline;justify-content:space-between}
+.acc-m-tete b{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acc-m-aff{font-size:11px;color:var(--bleu-fonce);background:var(--primaire-pale);padding:2px 8px;border-radius:10px;font-weight:700;white-space:nowrap}
+.acc-m-info{font-size:12px;color:var(--mut);margin:3px 0 6px}
+.acc-barre{height:6px;background:#E3E8EF;border-radius:4px;overflow:hidden}
+.acc-barre i{display:block;height:100%;background:linear-gradient(90deg,#00ACE8,#0082DE)}
+/* mission ouverte : barre des 4 étapes, puis les deux écrans de l'étape */
+#etapes{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:12px 20px 0;max-width:1500px;margin:0 auto}
+#etapes em{font-size:22px}
+#tabs .tab.hors{display:none}
+@media(max-width:600px){ .acc-etapes,#etapes{grid-template-columns:repeat(2,1fr)} .acc-actions{grid-template-columns:1fr} .mtitre h1{max-width:60vw} }
+body.vue-accueil footer{max-width:760px;margin:0 auto;padding:0 16px 16px;text-align:center}
+#dSel{display:none}
+/* panneau de préparation */
+.prep-prop{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-bottom:1px solid #EEF1F5;font-size:13px;cursor:pointer}
+.prep-prop input{margin-top:3px}
+#prepPanel{border-left:4px solid var(--primaire)}
+.prep-info{display:inline-flex;width:16px;height:16px;border-radius:50%;background:var(--orange);color:#fff;font-size:11px;font-weight:700;align-items:center;justify-content:center;margin-top:2px;flex-shrink:0}
+/* contrôle « Prêt à envoyer » */
+.envoi{list-style:none;margin:8px 0 0;padding:0}
+.envoi li{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-bottom:1px solid #EEF1F5;font-size:13px}
+.envoi li > span:nth-child(2){flex:1}
+.envoi .ico{display:inline-flex;width:18px;height:18px;border-radius:50%;color:#fff;font-size:11px;font-weight:700;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.envoi .ok .ico{background:var(--ok)}
+.envoi .verifier .ico{background:var(--orange)}
+.envoi .bloquant .ico{background:#C62828}
+.envoi .src{color:var(--mut);font-size:11px}

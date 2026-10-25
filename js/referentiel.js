@@ -26,7 +26,11 @@ const REFERENTIEL = [
   {id:"ed-984", titre:"INRS ED 984 : VLEP aux agents chimiques en France (aide-mémoire technique)", url:"", fichier:"Aide mémoire technique.pdf", version:"Édition d’octobre 2016 : tableaux dépassés, remplacés par la base VLEP de l’INRS", luLe:"2026-10-25",
     apport:["Définitions (VLEP 8 h, CT, valeurs admises), conventions des fractions inhalable et alvéolaire ; valeurs à prendre dans la base INRS à jour"]},
   {id:"ed-6106", titre:"INRS ED 6106 : Les appareils de protection respiratoire, choix et utilisation", url:"", fichier:"Les appareils de protection respiratoire.pdf", version:"Document fourni", luLe:"2026-10-25",
-    apport:["Tableaux des FPA (dont ceux de l’annexe C de la NF EN 529) pour la pondération par les EPI respiratoires, au moment du calcul des résultats"]}
+    apport:["Tableaux des FPA (dont ceux de l’annexe C de la NF EN 529) pour la pondération par les EPI respiratoires, au moment du calcul des résultats"]},
+  {id:"ed-6132", titre:"INRS ED 6132 : Les fumées de soudage et des techniques connexes", url:"https://www.inrs.fr/dam/inrs/CataloguePapier/ED/TI-ED-6132.pdf", fichier:"", version:"Octobre 2018", luLe:"2026-10-25",
+    apport:["Polluants émis selon le procédé et le matériau (§ 4) : chrome VI et nickel sur inox, oxyde de zinc sur galvanisé, ozone en TIG et sur aluminium, dioxyde d’azote à la flamme, monoxyde de carbone en MAG CO₂ ; base de la table « procédés → agents » de la préparation"]},
+  {id:"ed-972", titre:"INRS ED 972 : Captage et traitement des aérosols de fluides de coupe", url:"https://www.inrs.fr/dam/inrs/CataloguePapier/ED/TI-ED-972.pdf", fichier:"", version:"2005", luLe:"2026-10-25",
+    apport:["Pas de VLEP française pour les aérosols de fluides de coupe ; objectif de 0,5 mg/m³ en fraction inhalable (§ 4.2.1) ; machines concernées : tours, fraiseuses, rectifieuses, perceuses, presses (§ 1)"]}
 ];
 
 const casNorm = s => (CAS_RE.exec(String(s||""))||[""])[0];

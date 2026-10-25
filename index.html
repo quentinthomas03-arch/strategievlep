@@ -12,12 +12,17 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Stratégie VLEP">
 
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap">
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
 
+<div id="accueil"></div>
+
 <header class="top">
-  <div class="brand"><img alt="" src="data:image/png;base64,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"><div><h1>Stratégie de prélèvement VLEP</h1><div class="sub">Outil local : aucune donnée ne quitte cet appareil</div></div></div>
+  <button class="btn ghost" id="bHome" type="button" title="Revenir à la liste des missions">← Missions</button>
+  <div class="mtitre"><h1 id="mTitre">Nouvelle mission</h1><div class="sub" id="mSous"></div></div>
   <div class="sp"></div>
   <div class="dos"><select id="dSel" title="Dossier en cours"></select><button class="btn ghost hide" id="bPrev" title="Revenir à la version du dossier d'avant la dernière mise à jour par fichier" type="button">↩</button><button class="btn ghost" id="bDelD" title="Supprimer ce dossier" type="button">🗑</button></div>
   <span class="save" id="saveState"></span>
@@ -25,12 +30,13 @@
   <button class="btn ghost" id="bSave">Enregistrer le projet</button>
   <button class="btn ghost" id="bPack" title="Crée un dossier de mission (Client / Mission) en ZIP : projet, carnet de visite, éléments exclus. Sur iPhone : « Enregistrer dans Fichiers » le déplie en vrai dossier." type="button">📁 Dossier de mission</button>
   <button class="btn ghost" id="bMail" title="Crée un brouillon Outlook avec le projet en pièce jointe : il ne reste qu'à saisir ton adresse">✉ Envoyer par mail</button>
-  <button class="btn ghost" id="bNew" title="Crée un nouveau dossier (les autres sont conservés)">+ Dossier</button>
+  <button class="btn ghost hide" id="bNew" title="Crée un nouveau dossier (les autres sont conservés)">+ Dossier</button>
   <input type="file" id="fOpen" accept=".json,.zip,application/json,application/zip" class="hide">
 </header>
 
 <div id="updBar" role="status"><span>Nouvelle version disponible.</span><button class="btn pri" id="bUpd" type="button">Actualiser</button><button class="btn ghost" id="bUpdX" type="button" title="Plus tard">✕</button></div>
 <div id="fieldBar"><button class="btn sm" id="bAllTabs" type="button">Afficher toutes les rubriques</button></div>
+<nav class="etapes" id="etapes"><button type="button" data-etape="1"><em>01</em><span>Documents</span><small></small></button><button type="button" data-etape="2"><em>02</em><span>GEH</span><small></small></button><button type="button" data-etape="3"><em>03</em><span>Plan</span><small></small></button><button type="button" data-etape="4"><em>04</em><span>Rapport</span><small></small></button></nav>
 <nav class="tabs" id="tabs">
   <button class="tab on" data-p="ent">1 · Entreprise</button>
   <button class="tab" data-p="terrain">2 · Terrain (visite)</button>
@@ -38,14 +44,15 @@
   <button class="tab" data-p="geh">4 · GEH &amp; tâches</button>
   <button class="tab" data-p="plan">5 · Plan d'échantillonnage</button>
   <button class="tab" data-p="just">6 · Justifications</button>
-  <button class="tab" data-p="devis">7 · Faisabilité &amp; devis</button>
   <button class="tab" data-p="export">Export</button>
+  <button class="tab" data-p="devis">7 · Faisabilité &amp; devis</button>
 </nav>
 
 <main>
 
 <!-- 1 ENTREPRISE -->
 <section id="p-ent">
+  <div class="card hide" id="prepPanel"></div>
   <div class="card imp" id="dropCard">
     <h2>Déposer les documents du dossier</h2>
     <div class="legend" style="margin:0 0 8px">Glisse tout d'un coup : devis ou document client (Word), annexe MonDevis, Seirich ou inventaire (Excel), ancien rapport SOCOTEC (Word), résultats FDS (Excel), projet enregistré (.json). Chaque fichier est reconnu tout seul, puis l'identification, les GEH, tâches, agents et le plan sont repris. Lu dans ton navigateur : rien n'est envoyé.</div>
@@ -195,10 +202,9 @@
       <div class="row" style="margin:0"><label class="btn pri" style="font-weight:600">Choisir le fichier…<input type="file" id="fSeirich" accept=".xlsx" class="hide"></label><span id="impMsg" style="font-size:13px"></span></div>
     </div>
     <div class="card imp" style="margin-bottom:12px">
-      <b>⚡ Préparer toute la stratégie automatiquement</b>
-      <div class="legend" style="margin:4px 0 8px">Après un import : retient les agents à VLEP réglementaire ou CMR (dans la base ou hors base), écarte les GEH sans agent retenu, remplit la matrice, génère le plan et les justifications. Tout reste modifiable ensuite.</div>
-      <div class="row" style="margin:0 0 8px"><b style="font-size:13px">Terrain de cette intervention :</b><label>Pompes dispo <input type="number" data-cap="pumps" min="1" placeholder="à saisir" style="width:60px;padding:3px 6px"></label><label>Techniciens <input type="number" data-cap="techs" min="1" placeholder="à saisir" style="width:55px;padding:3px 6px"></label><label>8 h / jour / tech <input type="number" data-cap="h8" min="1" placeholder="à saisir" style="width:55px;padding:3px 6px"></label><label>CT / jour / tech <input type="number" data-cap="ct" min="1" placeholder="à saisir" style="width:55px;padding:3px 6px"></label></div>
-      <div class="row" style="margin:0"><button class="btn pri" id="bAuto">Préparer la stratégie</button><label style="font-size:13px" title="Le périmètre de la stratégie est celui des VLEP réglementaires et des CMR ; cocher si le client demande aussi les VLEP admises (une mesure, hors accréditation)"><input type="checkbox" id="autoAdm"> inclure les VLEP admises</label><span id="autoMsg" style="font-size:13px"></span></div>
+      <b>⚡ Préparer toute la stratégie</b>
+      <div class="legend" style="margin:4px 0 8px">Propose les décisions à cocher (fusions, regroupements, GEH à écarter, agents probablement oubliés), reprend les paramètres de terrain de ta dernière mission, puis génère matrice, plan et justifications.</div>
+      <div class="row" style="margin:0"><button class="btn pri" id="bAuto">Préparer la stratégie</button><span id="autoMsg" style="font-size:13px"></span></div>
     </div>
     <div class="legend" style="margin:0 0 10px">Ateliers puis GEH. Les numéros se suivent automatiquement sur tout le site et alimentent le plan d'échantillonnage.</div>
     <div class="row" id="gToolbar" style="margin:0 0 6px">
@@ -288,6 +294,7 @@
 
 <section id="p-export" class="hide">
   <div id="manques"></div>
+  <div class="card" id="envoi"></div>
   <div class="card" id="relecture"></div>
   <div class="card">
     <h2>Document Word (trame de stratégie)</h2>
@@ -327,6 +334,7 @@
 <script src="js/terrain.js"></script>
 <script src="js/referentiel.js"></script>
 <script src="js/moteur.js"></script>
+<script src="js/procedes.js"></script>
 <script src="js/generation-plan.js"></script>
 <script src="js/import-inventaire.js"></script>
 <script src="js/plan.js"></script>
@@ -340,6 +348,9 @@
 <script src="js/devis.js"></script>
 <script src="js/devis-pdf.js"></script>
 <script src="js/relecteur.js"></script>
+<script src="js/accueil.js"></script>
+<script src="js/envoi.js"></script>
+<script src="js/preparation.js"></script>
 <script src="js/demarrage.js"></script>
 <script src="js/lib/pdfjs-sources.js"></script>
 <script>if("serviceWorker" in navigator && /^https?:/.test(location.protocol)){ navigator.serviceWorker.register("sw.js").catch(function(){}); }</script>

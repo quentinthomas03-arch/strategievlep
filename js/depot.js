@@ -96,7 +96,8 @@ async function processDrop(files){
   const pc = $("#fPrev").closest(".card"); if(pc) pc.dataset.dropcat = "auto";
 })();
 function msg(h, cls){ $("#expMsg").innerHTML = '<div class="'+(cls||"ok")+'">'+h+'</div>'; }
-$("#bWord").onclick = async ()=>{
+/* le bouton passe d'abord par le contrôle « Prêt à envoyer » (js/envoi.js) */
+async function genererWord(){
   try{
     const zip = await JSZip.loadAsync(trameBuf || b64ToBytes(TRAME_B64));
     const f = zip.file("word/document.xml"); if(!f) throw new Error("Fichier Word invalide.");
@@ -108,4 +109,4 @@ $("#bWord").onclick = async ()=>{
     download(blob, "Strategie_"+safe(S.ent.nom)+"_"+today()+".docx");
     msg("Word généré : "+S.agents.filter(a=>!noLab(a)).length+" agent(s) dans le tableau §2.4, identification remplie"+(S.ateliers.length?", GEH et tâches (§3.7)":"")+(S.plan.length?", plan d'échantillonnage ("+S.plan.filter(r=>r.kind!=="sec").length+" lignes).":"."));
   }catch(err){ msg("Échec de l'export Word : "+esc(err.message), "warn"); }
-};
+}

@@ -189,6 +189,7 @@ function manques(){
   else {
     const L = (f, txt) => { const l = gehs.filter(f).map(g=>g.des||"(sans nom)"); if(l.length) M(txt+" ("+l.length+") : "+l.slice(0,8).join(" ; ")+(l.length>8?"…":""), "geh"); };
     L(g=>!String(g.eff||"").trim(), "Effectif des GEH, utile pour savoir combien de jours de mesure prévoir");
+    gehHeterogenes().forEach(h=>M("GEH « "+h.g.des+" » peut-être hétérogène : « "+h.taches[0]+" » et « "+h.taches[1]+" » sans agent commun et de durées très différentes (scinder si ce sont des personnes différentes)", "geh"));
     L(g=>!String(g.orga||"").trim(), "Organisation du travail des GEH : équipes, horaires (périmètre et périodes de prélèvement, LAB REF 27 § 7.7)");
     L(g=>(g.taches||[]).some(k=>(k.t||k.prod) && !String(k.duree||"").trim()), "Durée d’exposition des tâches");
     L(g=>(g.taches||[]).some(k=>(k.t||k.prod) && !String(k.freq||"").trim()), "Fréquence d’exposition des tâches");
@@ -213,3 +214,35 @@ function manquesHtml(){
     L.map(x=>'<li>'+esc(x.t)+' <button class="btn sm" data-goto="'+x.p+'">'+esc(ONGLET_LBL[x.p]||x.p)+'</button></li>').join("")+'</ul></div>';
 }
 document.addEventListener("click", e=>{ const b = e.target.closest("[data-goto]"); if(b) show(b.dataset.goto); });
+
+/* ================= GEH à regrouper ou à scinder ================= */
+/* Un GEH réunit des fonctions ou tâches similaires justifiant des situations d'exposition comparables (arrêté du 15/12/2009,
+   annexe 1 § 2.2) ; il concerne des travailleurs exposés aux mêmes agents et effectuant les mêmes tâches (circulaire DGT
+   2010/03 § 4.1). */
+const SRC_GEH = "arrêté du 15/12/2009, annexe 1 § 2.2 ; circulaire DGT 2010/03 § 4.1";
+const rangDuree = t => { const m = t.min; if(m==null) return DRANK(t.duree)||0; return m<=15 ? 1 : m<=60 ? 2 : m<=240 ? 3 : 4; };
+/* profil d'exposition d'un GEH : pour chaque agent retenu, tâche courte ou non, rang de durée, fréquence quotidienne ou non */
+function signatureGeh(g){
+  const ags = agentsOfGeh(g).map(u=>S.agents.find(a=>a.uid===u)).filter(a=>a && !noLab(a)); if(!ags.length) return null;
+  return ags.map(a=>{ const p = profilAgent(g, a), rk = Math.max(0, ...p.taches.map(rangDuree)), an = Math.max(0, ...p.taches.map(t=>t.an||0));
+    return (casNorm(a.cas)||norm(a.agent))+"|"+(p.courte?"courte":"longue")+"|"+rk+"|"+(an>=52?"frequent":"rare"); }).sort().join(";");
+}
+/* groupes de GEH d'un même atelier au profil identique : regroupement possible (à décider par le technicien) */
+function gehARegrouper(){
+  const out = [];
+  S.ateliers.forEach(at=>{ const by = {}; at.gehs.filter(gehActive).forEach(g=>{ const s = signatureGeh(g); if(s) (by[s] = by[s]||[]).push(g); });
+    Object.values(by).forEach(l=>{ if(l.length>1 && new Set(l.map(g=>norm(g.des))).size>1) out.push({atelier:at.nom, gehs:l, agents:agentsOfGeh(l[0]).map(agName).filter(Boolean)}); }); });
+  return out;
+}
+/* GEH dont deux tâches n'ont aucun agent commun et des durées très différentes : peut-être deux populations distinctes */
+function gehHeterogenes(){
+  const out = [];
+  const court = s => { s = String(s).replace(/\s+/g," ").trim(); return s.length>60 ? s.slice(0,57)+"…" : s; };
+  S.ateliers.forEach(at=>at.gehs.filter(gehActive).forEach(g=>{
+    if(parseInt(g.eff)===1) return;   /* une seule personne : pas deux populations */
+    const T = {}; S.agents.filter(a=>!noLab(a)).forEach(a=>profilAgent(g, a).taches.forEach(t=>{ if(!t.nom) return; const k = norm(t.nom); T[k] = T[k] || {nom:t.nom, ags:new Set(), rk:0}; T[k].ags.add(a.uid); T[k].rk = Math.max(T[k].rk, rangDuree(t)); }));
+    const L = Object.values(T); let paire = null;
+    L.forEach((x,i)=>L.slice(i+1).forEach(y=>{ if(!paire && Math.abs(x.rk-y.rk)>=2 && ![...x.ags].some(u=>y.ags.has(u))) paire = [x, y]; }));
+    if(paire) out.push({g, taches:paire.map(x=>court(x.nom))}); }));
+  return out;
+}

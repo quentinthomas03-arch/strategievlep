@@ -48,16 +48,49 @@ function genPlan(o){
         rows.push({gehId:g.id, ag:G.map(a=>a.uid), type, nb, plage: type==="CT" ? (plageAuto(g,G,"CT") || "Sur phase exposante")+(nb>=NB_CAMPAGNE ? " – "+CT_MENTION : "") : (plageAuto(g,G,"8h") || (rk ? PLG[rk] : "En journée"))}); });
     });
   }));
-  /* planification : chaque prélèvement est placé au plus tôt, dans la limite des pompes et de la capacité des techniciens ;
-     une même ligne prend au plus « mesures8hParJour » prélèvements 8 h par jour (travailleurs différents) ; ses CT, le même jour si la capacité le permet */
-  const C = CAP(), cap8 = C.h8*C.techs, capC = C.ct*C.techs, day = []; let maxDay = 0;
-  const fits = (d,t) => { const u = day[d] || {h8:0, ct:0}, h8 = u.h8+(t==="8h"?1:0), ct = u.ct+(t==="CT"?1:0); return h8<=cap8 && ct<=capC && (h8+Math.min(ct,C.techs))<=C.pumps; };
   const effOf = id => { const g = S.ateliers.flatMap(a=>a.gehs).find(x=>x.id===id); return g ? g.eff : ""; };
-  rows.forEach(r=>{ const ds = [], perDay = r.type==="8h" ? mesures8hParJour(effOf(r.gehId), r.nb) : mesuresCTParJour(r.nb); let d = 1, n = 0;
-    for(let i=0;i<Math.max(1,r.nb);i++){ while(!fits(d, r.type)){ d++; n = 0; } day[d] = day[d] || {h8:0, ct:0}; if(r.type==="8h") day[d].h8++; else day[d].ct++; ds.push(d); maxDay = Math.max(maxDay,d); if(++n>=perDay){ d++; n = 0; } }
-    r.jour = [...new Set(ds)].map(x=>"J"+x).join(" / "); r.par = {}; ds.forEach(x=>{ r.par[x] = (r.par[x]||0)+1; }); });
+  const P = planifier(rows, CAP(), effOf);
+  rows.forEach((r,i)=>{ const ds = P.jours[i]; r.jour = [...new Set(ds)].sort((a,b)=>a-b).map(x=>"J"+x).join(" / "); r.par = {}; ds.forEach(x=>{ r.par[x] = (r.par[x]||0)+1; }); });
   S.plan = rows.map(r=>({id:uid(), kind:"row", jour:r.jour, ag:r.ag, agTxt:"", gehId:r.gehId, gehTxt:"", nb:r.nb, type:r.type, plage:r.plage, rep:{jour:r.jour, nb:r.nb, type:r.type, par:r.par}}));
-  persist(); return {n:rows.length, nElim, days:maxDay, orphans:S.agents.filter(a=>!noLab(a) && !linked.has(a.uid)).map(a=>a.agent)};
+  persist(); return {n:rows.length, nElim, days:P.days, daysGlouton:P.glouton, daysBorne:P.borne, orphans:S.agents.filter(a=>!noLab(a) && !linked.has(a.uid)).map(a=>a.agent)};
+}
+/* ---- planification des jours de terrain ----
+   Contraintes (identiques pour les deux méthodes) : par jour, au plus h8 × techniciens prélèvements 8 h et ct × techniciens CT,
+   et pas plus de pompes que disponibles (une pompe par 8 h, les CT d'un technicien se suivent sur une pompe) ;
+   une ligne prend au plus « mesures8hParJour » prélèvements 8 h par jour (travailleurs différents) et ses CT le même jour si possible.
+   1. placement au plus tôt, ligne par ligne (méthode historique) ;
+   2. recherche du nombre de jours minimal : en partant de la borne basse, les lignes les plus contraintes d'abord,
+      chaque bloc de la journée sur le jour le moins chargé où il tient. Le plan retenu est le plus court des deux. */
+const gainJours = r => (r.daysGlouton>r.days ? " au lieu de "+r.daysGlouton : "")+(r.days && r.days===r.daysBorne ? ", le minimum possible avec ces moyens" : "");
+function planifier(rows, C, effOf){
+  const cap8 = C.h8*C.techs, capC = C.ct*C.techs;
+  const tient = (u, h8, ct) => u.h8+h8<=cap8 && u.ct+ct<=capC && (u.h8+h8+Math.min(u.ct+ct, C.techs))<=C.pumps;
+  const parJour = r => r.type==="8h" ? mesures8hParJour(effOf(r.gehId), r.nb) : mesuresCTParJour(r.nb);
+  /* 1. au plus tôt */
+  const glouton = () => { const day = [], jours = []; let max = 0;
+    rows.forEach(r=>{ const ds = [], pj = parJour(r); let d = 1, n = 0;
+      for(let i=0;i<Math.max(1,r.nb);i++){ while(!tient(day[d] || {h8:0, ct:0}, r.type==="8h"?1:0, r.type==="CT"?1:0)){ d++; n = 0; }
+        day[d] = day[d] || {h8:0, ct:0}; if(r.type==="8h") day[d].h8++; else day[d].ct++; ds.push(d); max = Math.max(max,d); if(++n>=pj){ d++; n = 0; } }
+      jours.push(ds); });
+    return {jours, days:max}; };
+  /* 2. en D jours au plus : blocs d'une journée (taille « par jour » de la ligne), lignes aux blocs les plus nombreux puis les plus gros d'abord */
+  const essai = D => { const day = Array.from({length:D+1}, ()=>({h8:0, ct:0})), jours = rows.map(()=>[]);
+    const ordre = rows.map((r,i)=>{ const n = Math.max(1,r.nb), pj = Math.min(parJour(r), n); return {i, r, pj, nbBlocs:Math.ceil(n/pj)}; })
+      .sort((a,b)=>b.nbBlocs-a.nbBlocs || b.pj-a.pj || a.i-b.i);
+    for(const o of ordre){ let reste = Math.max(1,o.r.nb); const pris = new Set();
+      while(reste>0){ const t = Math.min(o.pj, reste), h = o.r.type==="8h" ? t : 0, c = o.r.type==="CT" ? t : 0; let best = 0;
+        for(let d=1; d<=D; d++){ if(pris.has(d) || !tient(day[d], h, c)) continue; if(!best || day[d].h8+day[d].ct < day[best].h8+day[best].ct) best = d; }
+        if(!best){ /* bloc trop gros pour une journée restante : un prélèvement à la fois */
+          for(let d=1; d<=D && !best; d++) if(!pris.has(d) && tient(day[d], h?1:0, c?1:0)) best = d;
+          if(!best) return null; day[best].h8 += h?1:0; day[best].ct += c?1:0; jours[o.i].push(best); pris.add(best); reste--; continue; }
+        day[best].h8 += h; day[best].ct += c; for(let k=0;k<t;k++) jours[o.i].push(best); pris.add(best); reste -= t; } }
+    return {jours, days:Math.max(0, ...jours.flat())}; };
+  const G = glouton();
+  const n8 = rows.filter(r=>r.type==="8h").reduce((s,r)=>s+Math.max(1,r.nb),0), nC = rows.filter(r=>r.type==="CT").reduce((s,r)=>s+Math.max(1,r.nb),0);
+  const borne = Math.max(1, Math.ceil(n8/Math.min(cap8, C.pumps)), Math.ceil(nC/capC), ...rows.map(r=>Math.ceil(Math.max(1,r.nb)/Math.min(parJour(r), Math.max(1,r.nb)))));
+  let lo = borne, hi = G.days-1, best = null;   /* recherche par dichotomie : les grosses missions comptent des centaines de lignes */
+  while(lo<=hi){ const D = (lo+hi)>>1, E = essai(D); if(E){ best = E; hi = Math.min(D, E.days)-1; } else lo = D+1; }
+  return Object.assign(best || G, {glouton:G.days, borne});
 }
 /* ---- matrice GEH x agents ---- */
 function renderMat(){
@@ -88,31 +121,7 @@ $("#bGenPlan").onclick = ()=>{
   if(S.plan.length && !confirm("Remplacer le plan actuel ("+S.plan.length+" lignes) par une proposition générée ?")) return;
   const r = genPlan({nb:Math.max(1,parseInt($("#gpNb").value)||3), ct:$("#gpCT").checked, grp:$("#gpGrp").checked, mode:"cap"});
   renderPlan(); if(S.just && S.just.some(i=>i.auto)) genJust();
-  $("#gpMsg").innerHTML = r.n ? '<div class="ok"><b>'+r.n+' ligne(s) proposée(s), '+r.days+' jour(s) de terrain.</b> À relire : nombre de prélèvements, regroupements, plages horaires et jours.</div>' + (r.orphans.length ? '<div class="warn"><b>'+r.orphans.length+' agent(s) retenu(s) sans GEH dans la matrice</b>, donc absents du plan : '+esc(r.orphans.join(" ; "))+'</div>' : '') : '<div class="warn">Aucune ligne générée : coche des couples GEH × agent dans la matrice (ou saisis des polluants sur le terrain).</div>';
+  $("#gpMsg").innerHTML = r.n ? '<div class="ok"><b>'+r.n+' ligne(s) proposée(s), '+r.days+' jour(s) de terrain'+gainJours(r)+'.</b> À relire : nombre de prélèvements, regroupements, plages horaires et jours.</div>' + (r.orphans.length ? '<div class="warn"><b>'+r.orphans.length+' agent(s) retenu(s) sans GEH dans la matrice</b>, donc absents du plan : '+esc(r.orphans.join(" ; "))+'</div>' : '') : '<div class="warn">Aucune ligne générée : coche des couples GEH × agent dans la matrice (ou saisis des polluants sur le terrain).</div>';
 };
 
-/* ================= Pilote automatique ================= */
-$("#bAuto").onclick = ()=>{
-  if(!S.ateliers.length) return alert("Importe d'abord un inventaire (Seirich ou autre) ou crée des GEH.");
-  if(!capSet()){ alert(CAP_MSG); const f = document.querySelector("#p-geh [data-cap]"); if(f) f.focus(); return; }
-  /* 1. agents */
-  const before = S.agents.length; const f0 = $("#candF").value; $("#candF").value = $("#autoAdm") && $("#autoAdm").checked ? "regadm" : "reg";
-  S.cand.forEach((c,i)=>{ if(candOK(c) && (c.refs.length || (!c.emis && (c.v8||c.vct||c.cmr)))) addCand(i); }); $("#candF").value = f0;
-  /* 1 bis. GEH homonymes (inventaire à une ligne par produit) */
-  let msgFus = ""; const hom = gehHomonymes();
-  if(hom.length && confirm("Fusionner les GEH qui portent le même nom ?\n\n"+hom.map(l=>"• "+l[0].des+" ("+l.length+" GEH"+(l.ateliers.length>1 ? ", ateliers : "+l.ateliers.join(", ") : "")+")").join("\n")+"\n\n(OK = fusionner, Annuler = les garder séparés)")){
-    hom.forEach(fusionGeh); msgFus = hom.reduce((n,l)=>n+l.length-1,0)+" GEH fusionné(s). "; }
-  /* 2. GEH sans agent */
-  const dropped = []; S.ateliers.forEach(a=>a.gehs.forEach(g=>{ if(!agentsOfGeh(g).length && !(g.agents||[]).length) dropped.push(g); }));
-  const total = S.ateliers.reduce((n,a)=>n+a.gehs.length,0);
-  let msgDrop = "";
-  if(dropped.length && dropped.length<total){
-    if(confirm("Écarter "+dropped.length+" GEH sans agent retenu ?\n\n"+dropped.map(g=>"• "+g.des).join("\n")+"\n\n(OK = les supprimer, Annuler = les garder)")){
-      const ids = new Set(dropped.map(g=>g.id)); dropGehRefs(ids); S.ateliers.forEach(a=>{ a.gehs = a.gehs.filter(g=>!ids.has(g.id)); }); cleanEmptyAteliers(); msgDrop = dropped.length+" GEH écarté(s). ";
-    }
-  }
-  /* 3. plan + justifications */
-  const r = genPlan({nb:3, ct:true, grp:true, mode:"cap"}); S.just = (S.just||[]).filter(i=>!i.auto || i.edited); const nj = genJust();
-  persist(); renderGeh(); renderSel(); renderList(); renderCand();
-  $("#autoMsg").innerHTML = '<b>'+(S.agents.length-before)+' agent(s) ajouté(s), '+msgFus+msgDrop+r.n+' ligne(s) de plan, '+nj+' justification(s) proposée(s).</b> Relis l\'onglet 5 (matrice et plan), puis l\'onglet 6.';
-};
+/* ================= Pilote automatique : voir js/preparation.js ================= */

@@ -56,6 +56,7 @@ const today = () => new Date().toISOString().slice(0,10);
 
 /* ================= Onglets ================= */
 function show(p){
+  document.body.classList.remove("vue-accueil");
   $$("#tabs .tab[data-p]").forEach(t=>t.classList.toggle("on", t.dataset.p===p));
   ["ent","terrain","agents","geh","plan","just","devis","export"].forEach(x=>$("#p-"+x).classList.toggle("hide", x!==p));
   syncEnt();
@@ -65,6 +66,9 @@ function show(p){
   if(p==="plan") renderPlan();
   if(p==="just") renderJust();
   if(p==="devis") renderDevis();
-  if(p==="export"){ $("#manques").innerHTML = manquesHtml(); $("#referentiel").innerHTML = referentielHtml(); renderRelecture(); }
+  if(p==="export"){ /* tant qu'il n'y a pas de plan, la liste de ce qui manque ; ensuite le contrôle « Prêt à envoyer », qui la reprend */
+    const avecPlan = typeof renderEnvoi==="function" && S.plan.some(r=>r.kind!=="sec");
+    $("#manques").innerHTML = avecPlan ? "" : manquesHtml(); $("#envoi").classList.toggle("hide", !avecPlan); if(avecPlan) renderEnvoi(); $("#referentiel").innerHTML = referentielHtml(); renderRelecture(); }
+  if(typeof majEtapes==="function") majEtapes(p);
 }
 $("#tabs").addEventListener("click", e=>{ const t=e.target.closest(".tab[data-p]"); if(t) show(t.dataset.p); });

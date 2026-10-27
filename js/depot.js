@@ -34,18 +34,21 @@ async function docxText(buf){
 async function classifyFile(f){
   const ext = (f.name.split(".").pop()||"").toLowerCase(), buf = await f.arrayBuffer();
   if(ext==="json"||ext==="zip") return {f, kind:"projet"};
-  if(ext==="pdf"){ try{ const D = await readDevisPdf(buf); if(D) return {f, kind:"devis", pdfD:D}; }catch(err){ return {f, kind:"pdf", err:"Lecture du PDF impossible ("+err.message+")."}; } return {f, kind:"pdf"}; }
+  if(ext==="pdf"){ try{ const D = await readDevisPdf(buf.slice(0)); if(D) return {f, kind:"devis", pdfD:D}; const t = (await pdfPages(buf)).slice(0,3).map(p=>p.text).join("\n"); if(isEvrcRapport(t)) return {f, kind:"evrcRapport", txt:t}; }catch(err){ return {f, kind:"pdf", err:"Lecture du PDF impossible ("+err.message+")."}; } return {f, kind:"pdf"}; }
   if(/^docx?m?$/.test(ext)){ if(ext==="doc") return {f, kind:"inconnu"}; const z = await JSZip.loadAsync(buf), x = await z.file("word/document.xml").async("string");
-    return {f, kind: (/Désignation du GEH/.test(x) && /Code NAF/.test(x)) ? "strategie" : "devis", buf}; }
+    if(/Désignation du GEH/.test(x) && /Code NAF/.test(x)) return {f, kind:"strategie", buf};
+    if(isEvrcRapport(x.replace(/<[^>]+>/g,""))) return {f, kind:"evrcRapport", buf};
+    return {f, kind:"devis", buf}; }
   if(/^xls[xm]$/.test(ext)){ const SH = await readXlsx(buf);
     if(Object.keys(SH).some(n=>/^Plan d.\s?[ée]chantillonnage/i.test(n)) && SH["Décomposition en GEH"]) return {f, kind:"annexe", SH};
+    if(isEvrcAnnexe(SH)) return {f, kind:"evrc", SH};
     if(SH["Tâches"] && SH["Zones"]) return {f, kind:"seirich", SH};
     if(SH["Composants"]) return {f, kind:"fds", SH};
     return {f, kind:"inventaire", SH}; }
   return {f, kind:"inconnu"};
 }
-const K_LAB = {projet:"Projet enregistré", strategie:"Ancien rapport (stratégie SOCOTEC)", annexe:"Annexe MonDevis", devis:"Devis / document client", seirich:"Seirich", inventaire:"Inventaire de produits", fds:"Résultats FDS", pdf:"PDF", inconnu:"Fichier non reconnu"};
-const K_ORD = {projet:0, strategie:1, annexe:2, devis:3, seirich:4, inventaire:4, fds:5, pdf:6, inconnu:7};
+const K_LAB = {projet:"Projet enregistré", strategie:"Ancien rapport (stratégie SOCOTEC)", annexe:"Annexe MonDevis", devis:"Devis / document client", evrcRapport:"Rapport d'évaluation du risque chimique (EvRC)", seirich:"Seirich", evrc:"Annexes de l'EvRC SOCOTEC", inventaire:"Inventaire de produits", fds:"Résultats FDS", pdf:"PDF", inconnu:"Fichier non reconnu"};
+const K_ORD = {projet:0, strategie:1, annexe:2, devis:3, evrcRapport:3, seirich:4, evrc:4, inventaire:4, fds:5, pdf:6, inconnu:7};
 let dropBusy = false;
 async function processDrop(files){
   files = [...files]; if(!files.length || dropBusy) return; dropBusy = true; const log = $("#dropLog"); const rows = [];
@@ -54,7 +57,7 @@ async function processDrop(files){
     const items = []; for(const f of files){ try{ items.push(await classifyFile(f)); }catch(err){ items.push({f, kind:"inconnu", err:err.message}); } }
     items.sort((a,b)=>K_ORD[a.kind]-K_ORD[b.kind]);
     items.forEach(it=>rows.push({name:it.f.name, kind:K_LAB[it.kind], msg:"En attente…", cls:"chg", it})); draw();
-    const hasBase = items.some(i=>/^(strategie|annexe|seirich|inventaire|projet)$/.test(i.kind));
+    const hasBase = items.some(i=>/^(strategie|annexe|seirich|evrc|inventaire|projet)$/.test(i.kind));
     if(hasBase && !items.some(i=>i.kind==="projet") && (S.agents.length||S.ateliers.length||(S.ent.nom||"").trim())) newDossier();
     const mk = f => ({target:{files:[f], value:""}});
     for(const r of rows){ const it = r.it; r.msg = "Lecture…"; draw();
@@ -69,7 +72,9 @@ async function processDrop(files){
             if(D.cas.length){ let add = 0; const miss = []; D.cas.forEach(c=>{ const b = BASE.find(x=>x._c===c.cas); if(b){ if(addBase(b.ref)) add++; } else miss.push(c.nom||c.cas); }); extra += " "+add+" agent(s) ajouté(s) depuis l'annexe"+(miss.length?" ; absents de la base : "+miss.join(", "):"")+"."; } }
           persist(); bindEnt(); if(extra) { try{ renderGeh(); }catch(_){} }
           r.msg = (got.length ? "Repris : "+got.map(k=>LB[k]||k).join(", ")+". Vérifie les champs." : "Aucune information d'identification nouvelle (déjà renseignées ou format inhabituel).")+extra; r.cls = (got.length||extra) ? "add" : "del"; }
-        else if(it.kind==="seirich"||it.kind==="inventaire"){
+        else if(it.kind==="evrcRapport"){ const R = evrcFromText(it.buf ? (await docxText(it.buf)).text : it.txt), got = applyEvrcRapport(R); bindEnt();
+          r.msg = (got.length ? "Repris : "+got.join(", ")+". Vérifie les champs." : "Rien de nouveau (champs déjà renseignés).")+" Les GEH, tâches et substances viennent des annexes Excel de l'EvRC : dépose-les aussi."+(items.some(i=>i.kind==="evrc") ? "" : " <span class=\"warn\">Annexe Excel absente de ce dépôt.</span>"); r.cls = got.length ? "add" : "del"; }
+        else if(it.kind==="seirich"||it.kind==="evrc"||it.kind==="inventaire"){
           if(S.ateliers.length){ await HND.fCmp(mk(it.f)); r.msg = "Comparé avec le dossier en cours : voir les écarts ci-dessous (bouton « Appliquer » pour intégrer)."; }
           else { await HND.fSeirich(mk(it.f)); r.msg = $("#impMsg").innerHTML; } }
         else if(it.kind==="fds"){ await HND.fFds(mk(it.f)); r.msg = $("#fdsMsg").innerHTML; }

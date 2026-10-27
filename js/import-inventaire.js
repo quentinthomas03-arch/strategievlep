@@ -12,6 +12,7 @@ const INV_COLS = {
 };
 const invCol = (h, k) => h.findIndex(x=>INV_COLS[k].some(a=> typeof a==="string" ? x===a : a.test(x)));
 function parseInventaire(sheets){
+  if(isEvrcAnnexe(sheets)) return parseEvrc(sheets);
   let best = null;
   for(const name of Object.keys(sheets)){
     const R = sheets[name];

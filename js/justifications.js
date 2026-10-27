@@ -68,8 +68,8 @@ function jDur(s){ s = String(s||"").toLowerCase().replace(",",".");
 function perYear(f){
   f = String(f||"").toLowerCase(); if(!f.trim()) return null;
   if(/quotidien|tous les jours|chaque jour/.test(f)) return 250; if(/hebdo/.test(f)) return 52; if(/mensuel/.test(f)) return 12; if(/annuel/.test(f)) return 1;
-  const m = /(\d+(?:[.,]\d+)?)\s*(?:x|fois)?\s*(?:\/|par)?\s*(sem|mois|an\b|ans\b|jour|j\b|quinz)/.exec(f); if(!m) return null;
-  const n = parseFloat(m[1].replace(",",".")), u = m[2]; return n * (u==="sem"?52 : u==="mois"?12 : /^an/.test(u)?1 : u==="quinz"?24 : 250);
+  const m = /(\d+(?:[.,]\d+)?)\s*(?:x|fois)?\s*(?:\/|par)?\s*(sem(?!estre)|semestre|trimestre|mois|an\b|ans\b|jour|j\b|quinz)/.exec(f); if(!m) return null;
+  const n = parseFloat(m[1].replace(",",".")), u = m[2]; return n * (u==="sem"?52 : u==="semestre"?2 : u==="trimestre"?4 : u==="mois"?12 : /^an/.test(u)?1 : u==="quinz"?24 : 250);
 }
 function perDay(f){ f = String(f||"").toLowerCase(); if(/quotidien/.test(f)) return 1; if(/plusieurs fois\s*(\/|par)?\s*jour/.test(f)) return 2;
   const m = /(\d+(?:[.,]\d+)?)\s*(?:x|fois)\s*(?:\/|par)?\s*(?:jour|j\b)/.exec(f); return m ? parseFloat(m[1].replace(",",".")) : null; }

@@ -41,7 +41,9 @@ function sortedIdx(){
 }
 /* agent sans laboratoire dans la base : écarté de l'étude, sauf demande du client (l'onglet Faisabilité reste disponible pour chercher une offre) */
 const hasSol = a => { const sl = (S.dvSel||{})[a.cas || norm(a.agent)]; return !!(sl && (sl.t==="o" || sl.t==="c")); };
-function noLab(a){ return !!a && !a.keepNoLab && !String(a.labo||"").trim() && !hasSol(a); }
+/* agent absent de la base (import, saisie) : la méthode reste à trouver, il n'est jamais écarté pour « aucun laboratoire » */
+const horsBase = a => !!a && a.ref==null && /hors base/i.test(String(a.methode||""));
+function noLab(a){ return !!a && !a.keepNoLab && !horsBase(a) && !String(a.labo||"").trim() && !hasSol(a); }
 /* après tout changement de labo / solution / conservation : retire des plan les agents écartés et recalcule les phrases automatiques */
 function syncStrategy(){
   _acdC.clear();
@@ -58,7 +60,7 @@ function renderSel(){
   const rows = sortedIdx().map(i=>{
     const a = S.agents[i], t = vtype(a);
     const note = a.methode ? '<span class="m">'+esc(a.methode)+(a.labo?' · '+esc(a.labo):'')+'</span>' : '';
-    const nl = noLab(a), keepB = (nl || a.keepNoLab) ? '<span class="m" style="color:#b45309">'+(nl ? 'Aucun laboratoire ne réalise cette analyse : agent écarté de l\u2019étude. ' : 'Conservé à la demande du client. ')+'<a href="#" data-keep="'+i+'">'+(nl ? 'Conserver (demande client)' : 'Écarter')+'</a></span>' : '';
+    const nl = noLab(a), keepB = horsBase(a) ? '<span class="m" style="color:#b45309">Hors base : méthode et laboratoire à trouver avant l’envoi (ou retirer l’agent avec sa justification).</span>' : (nl || a.keepNoLab) ? '<span class="m" style="color:#b45309">'+(nl ? 'Aucun laboratoire ne réalise cette analyse : agent écarté de l\u2019étude. ' : 'Conservé à la demande du client. ')+'<a href="#" data-keep="'+i+'">'+(nl ? 'Conserver (demande client)' : 'Écarter')+'</a></span>' : '';
     return '<tr class="'+t+(isAcc(a)?'':' hors')+'"><td class="l">'+esc(a.agent)+note+keepB+'</td><td>'+esc(a.cas||"-")+'</td><td>'+fmt(a.v8)+'</td><td>'+fmt(a.vct)+'</td><td>'+esc(a.cmr||"-")+'</td><td>'+(a.accP==="X"?"X":"")+'</td><td>'+(a.accA==="X"?"X":"")+'</td><td><button class="btn sm" data-rm="'+i+'" title="Retirer">×</button></td></tr>';
   }).join("");
   $("#selWrap").innerHTML = '<table class="t"><thead><tr><th rowspan="2">Agent chimique</th><th rowspan="2">N° CAS</th><th colspan="2">VLEP (mg/m³)</th><th rowspan="2">CMR</th><th colspan="2">Accréditations</th><th rowspan="2"></th></tr><tr><th>8 h</th><th>CT</th><th>prélèvements</th><th>analyses</th></tr></thead><tbody>'+rows+'</tbody></table>'+

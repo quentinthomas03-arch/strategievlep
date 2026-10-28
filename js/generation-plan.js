@@ -7,10 +7,15 @@ function durRank(g, a){
   let L = g.taches.filter(k=>{ const p = norm(k.prod); return names.some(n=>p.includes(n)); }); if(!L.length) L = g.taches;
   return L.reduce((m,k)=>Math.max(m,DRANK(k.duree)),0);
 }
-const M_OPT = [["","—"],["8h","8h"],["CT","CT"],["8h+CT","8h + CT"],["x1","✕ exposition faible"],["x2","✕ quantité négligeable"],["x3","✕ produit disparu"],["x4","✕ autre (à justifier)"],["x5","✕ risque faible (ERC, non CMR)"]];
+const M_OPT = [["","—"],["8h","8h"],["CT","CT"],["8h+CT","8h + CT"],["x1","✕ exposition faible"],["x2","✕ quantité négligeable"],["x3","✕ produit disparu"],["x4","✕ autre (à justifier)"],["x5","✕ risque faible (ERC, non CMR)"],["x6","✕ hors arrêté (VLEP admise ou sans VLEP)"]];
 function matOpts(){ return {ct: $("#gpCT") ? $("#gpCT").checked : true, nb: Math.max(1, parseInt($("#gpNb") ? $("#gpNb").value : 3)||3)}; }
-/* g (GEH complet, facultatif) : tâche courte non répétée + VLCT -> CT seul (VLEP 8 h vérifiée par pondération) */
-function defState(a,o,g){ if(g && !estCMR1(a) && profilAgent(g,a).risqueFaible) return "x5"; if(g && a.vct && profilAgent(g,a).courte) return "CT"; if(a.v8 || !a.vct) return (o.ct && a.vct && ["contr","indic"].includes(vtype(a))) ? "8h+CT" : "8h"; return "CT"; }
+/* hors du champ de l'arrêté du 15/12/2009 : aucune VLEP réglementaire (8 h ni CT), CMR compris */
+const horsArrete = a => !isRegl(a,"8h") && !isRegl(a,"CT");
+/* g (GEH complet, facultatif) : hors arrêté -> non mesuré par défaut (ajout possible, mesure unique) ; risque faible ERC (non CMR) -> éliminé ;
+   exposition continue -> 8 h ; tâche courte non répétée + VLCT -> CT seul (VLEP 8 h vérifiée par pondération) */
+function defState(a,o,g){ if(horsArrete(a)) return "x6"; const p = g ? profilAgent(g,a) : null;
+  if(p && !estCMR1(a) && p.risqueFaible) return "x5"; if(p && a.vct && !p.continu && p.courte) return "CT";
+  if(a.v8 || !a.vct) return (o.ct && a.vct && ["contr","indic"].includes(vtype(a))) ? "8h+CT" : "8h"; return "CT"; }
 function matCell(g,a,o,link){ const k = g.id+"|"+a.uid; if(S.mat[k]!=null) return S.mat[k]; return link[g.id] && link[g.id].has(a.uid) ? defState(a,o,S.ateliers.flatMap(x=>x.gehs).find(x=>x.id===g.id)) : ""; }
 function linkMap(){ const link = {}; S.ateliers.forEach(at=>at.gehs.forEach(g=>{ link[g.id] = new Set(agentsOfGeh(g)); })); return link; }
 /* nature de la VLEP pour le type de mesure (8h / CT) : réglementaire (contraignante ou indicative) => triplé ; admise, CMR sans VLEP => 1 mesure */

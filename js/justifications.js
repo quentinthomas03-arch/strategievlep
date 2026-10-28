@@ -196,11 +196,14 @@ function genJust(){
     x2:["erc","Les agents chimiques suivants sont présents en quantité négligeable dans les GEH indiqués et ne font pas l’objet de prélèvement :"],
     x3:["erc","Les produits contenant les agents chimiques suivants ne sont plus utilisés (produit disparu ou substitué, non utilisé depuis plus de 6 mois). Aucun prélèvement n’a, par conséquent, été prévu :"],
     x4:["ag","Les agents chimiques suivants ne font pas l’objet de prélèvement ("+TBC+") :"],
-    x5:["erc","Les agents chimiques suivants, non CMR, sont évalués à risque faible dans votre évaluation des risques chimiques pour les GEH indiqués. Conformément aux articles R. 4412-12 et R. 4412-13 du code du travail (circulaire DGT 2010/03 du 13 avril 2010, § 2.2.2), ils ne font pas l’objet du contrôle technique :"]};
+    x5:["erc","Les agents chimiques suivants, non CMR, sont évalués à risque faible dans votre évaluation des risques chimiques pour les GEH indiqués. Conformément aux articles R. 4412-12 et R. 4412-13 du code du travail (circulaire DGT 2010/03 du 13 avril 2010, § 2.2.2), ils ne font pas l’objet du contrôle technique :"],
+    x6:["ag","Les agents chimiques suivants ne disposent d’aucune VLEP réglementaire (VLEP admise ou absence de VLEP) : ils n’entrent pas dans le champ du contrôle technique de l’arrêté du 15 décembre 2009 (articles R. 4412-27 et R. 4412-76 du code du travail) et ne font pas l’objet de prélèvement dans la présente stratégie :"]};
   /* état de chaque case de la matrice : choix saisi, sinon proposition du moteur (ex. « risque faible » de l'ERC) */
   const elim = {}, mo = matOpts(), lk = linkMap();
   S.ateliers.forEach(at=>at.gehs.forEach(g=>{ if(!gn[g.id]) return; S.agents.forEach(a=>{ const st = matCell(g, a, mo, lk); if(!/^x/.test(st||"")) return; ((elim[st] = elim[st]||{})[a.agent] = elim[st][a.agent]||[]).push(gn[g.id]); }); }));
   Object.keys(elim).forEach(st=>add(EL[st][0],"mat."+st,EL[st][1],true,Object.keys(elim[st]).map(n=>n+" (GEH "+elim[st][n].sort((x,y)=>x-y).join(", ")+")")));
+  /* mesures ajoutées hors du champ de l'arrêté (VLEP admise, CMR sans VLEP) : à présenter comme mesures de l'ERC */
+  if(rows.some(r=>(r.ag||[]).some(u=>{ const a = S.agents.find(x=>x.uid===u); return a && horsArrete(a); }))) setOn("erc.C", true);
   /* infos mesures */
   if(rows.some(r=>planAgents(r).length>1)) setOn("infos.A", true);
   if(rows.some(r=>r.type==="8h" && !/^$|En journée|Plus de 4h/.test((r.plage||"").trim()))) setOn("infos.B", true);

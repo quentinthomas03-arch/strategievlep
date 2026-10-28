@@ -34,6 +34,9 @@ function controleEnvoi(){
   if(!lignes.length){ C("bloquant", "Plan d’échantillonnage à générer", "plan", SRC_77); return out; }
   const sansVl = ags.filter(a=>!numOf(a.v8) && !numOf(a.vct)).map(nomA);
   C(sansVl.length ? "bloquant" : "ok", sansVl.length ? "Agents du plan sans VLEP 8 h ni CT : "+liste(sansVl) : ags.length+" agent(s) du plan avec leur VLEP", "agents", SRC_77);
+  const hb = ags.filter(horsBase), hbR = hb.filter(a=>estCMR1(a) || !horsArrete(a)).map(nomA), hbA = hb.filter(a=>!(estCMR1(a) || !horsArrete(a))).map(nomA);
+  if(hbR.length) C("bloquant", "Agents hors base sans méthode ni laboratoire (CMR ou VLEP réglementaire) : "+liste(hbR), "agents", SRC_77);
+  if(hbA.length) C("verifier", "Agents hors base sans méthode ni laboratoire (hors arrêté) : "+liste(hbA), "agents", SRC_77);
   const sansMeth = ags.filter(a=>!String(a.methode||"").trim()).map(nomA);
   C(sansMeth.length ? "bloquant" : "ok", sansMeth.length ? "Méthode de prélèvement et d’analyse à renseigner : "+liste(sansMeth) : "Tableau des méthodes complet", "agents", SRC_77);
   const sansCompo = typeof exAll==="function" ? exAll().filter(x=>x.x.why==="sans-compo").length : 0;

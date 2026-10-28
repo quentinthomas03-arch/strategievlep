@@ -16,6 +16,7 @@ const SRC = {
 };
 const NB_CAMPAGNE = 3;      /* mesures par GEH et par campagne, 8 h comme CT (choix SOCOTEC pour le CT : 3 par campagne, 9 sur les 3 campagnes) */
 const NB_EVAL_INITIALE = 9; /* mesures sur l'évaluation initiale (3 campagnes) */
+const RARE_AN = 12;         /* tâche réalisée moins de 12 fois par an : mesures à caler sur ses jours de réalisation */
 const CT_MIN = 15;          /* durée d'un prélèvement court terme (min) */
 const POSTE_MIN = 480;      /* période de référence 8 h (min) */
 const CT_MENTION = "3 CT en 1re campagne (9 sur les 3 campagnes de l’évaluation initiale)";
@@ -66,7 +67,7 @@ function tachesAgent(g, a){
   const out = [], noms = [a.agent].concat(candOfAgent(a).map(c=>c.nom));
   const dur = x => jDur(x.duree)!=null ? jDur(x.duree) : jDur(x.freq), an = x => perYear(x.freq)!=null ? perYear(x.freq) : perYear(x.duree), jr = x => perDay(x.freq)!=null ? perDay(x.freq) : perDay(x.duree);
   taskGroups(g).forEach(gr=>{ const h = gr.items[0]; gr.items.forEach(k=>{ if(!noms.some(n=>prodMatch(k.prod, n, k))) return;
-    out.push({nom:gr.name, risque:String(k.risque||h.risque||"").trim(), duree:(k.duree||h.duree||"").trim(), min: dur(k)!=null ? dur(k) : dur(h), an: an(k)!=null ? an(k) : an(h), jour: jr(k)!=null ? jr(k) : jr(h)}); }); });
+    out.push({nom:gr.name, risque:String(k.risque||h.risque||"").trim(), duree:(k.duree||h.duree||"").trim(), freqTxt:(k.freq||h.freq||"").trim(), min: dur(k)!=null ? dur(k) : dur(h), an: an(k)!=null ? an(k) : an(h), jour: jr(k)!=null ? jr(k) : jr(h)}); }); });
   return out;
 }
 /* Profil d'un couple GEH × agent :
@@ -74,20 +75,25 @@ function tachesAgent(g, a){
    - exhaustif : GEH d'une seule personne exposée 9 jours par an au plus (annexe 1 § 1.3) -> chaque jour d'exposition mesuré, 1 mesure par campagne */
 function profilAgent(g, a){
   const T = g && a ? tachesAgent(g, a) : [], eff = g ? parseInt(g.eff) : NaN;
-  const courte = T.length>0 && T.every(t=>t.min!=null && t.min<=CT_MIN && (t.jour==null || t.jour<=1));
+  /* exposition continue (« continu », « en permanence ») : jamais traitée comme une tâche courte */
+  const continu = T.some(t=>/continu|en permanence|toute la journ/i.test(t.duree+" "+(t.freqTxt||"")));
+  const courte = !continu && T.length>0 && T.every(t=>t.min!=null && t.min<=CT_MIN && (t.jour==null || t.jour<=1));
   const jours = T.length && T.every(t=>t.an!=null) ? T.reduce((s,t)=>s+t.an, 0) : null;
-  /* ERC de l'employeur : toutes les tâches de l'agent cotées en risque faible */
-  const risqueFaible = T.length>0 && T.every(t=>/faible|low|vert|green|^1$/i.test(t.risque));
-  return {taches:T, courte, jours, exhaustif: eff===1 && jours!=null && jours<=NB_EVAL_INITIALE, risqueFaible};
+  /* ERC de l'employeur : GEH déclaré à risque faible, ou toutes les tâches de l'agent cotées en risque faible */
+  const risqueFaible = !!(g && g.ercFaible) || (T.length>0 && T.every(t=>/faible|low|vert|green|^1$/i.test(t.risque)));
+  /* tâche peu fréquente : moins de 12 fois par an, les jours de mesure doivent coïncider avec ceux de la tâche */
+  const rare = !continu && jours!=null && jours<RARE_AN;
+  return {taches:T, courte, continu, jours, rare, exhaustif: eff===1 && jours!=null && jours<=NB_EVAL_INITIALE, risqueFaible};
 }
 /* Plage horaire écrite à partir des tâches de l'inventaire (sinon null) */
 function plageAuto(g, ags, type){
   const T = []; ags.forEach(a=>profilAgent(g, a).taches.forEach(t=>{ if(t.nom && !T.some(x=>norm(x.nom)===norm(t.nom))) T.push(t); }));
   if(!T.length) return null;
   const noms = T.length>3 ? "plusieurs tâches ("+T.length+")" : T.map(t=>t.nom).join(" / ");
-  if(type==="CT") return "Sur phase exposante"+(T.length>1 ? " – plusieurs phases : " : " : ")+noms;
-  const courte = ags.every(a=>profilAgent(g, a).courte);
-  return noms+(T.length===1 && T[0].duree ? " ("+T[0].duree+")" : "")+(courte ? " – prélèvement sur la tâche, pondéré sur 8 h" : "");
+  const P = ags.map(a=>profilAgent(g, a)), rare = P.every(p=>p.rare) && !P.every(p=>p.exhaustif) ?" – tâche réalisée "+Math.max(...P.map(p=>p.jours))+" fois par an au plus : à caler sur ses jours de réalisation" : "";
+  if(type==="CT") return "Sur phase exposante"+(T.length>1 ? " – plusieurs phases : " : " : ")+noms+rare;
+  const courte = P.every(p=>p.courte);
+  return noms+(T.length===1 && T[0].duree ? " ("+T[0].duree+")" : "")+(courte ? " – prélèvement sur la tâche, pondéré sur 8 h" : "")+rare;
 }
 /* Justifications qui citent un agent absent du plan (sections durée, nombre de mesures, VLCT, informations) */
 function controleJustifs(){
@@ -111,6 +117,9 @@ function analyseLigne(r){
   const regl = ags.some(a=>isRegl(a, r.type)), P = ags.map(a=>profilAgent(g, a)), exh = ags.length>0 && P.every(p=>p.exhaustif);
   if(ags.length && !regl) R("VLEP non réglementaire (admise) : hors du champ de l’arrêté, une mesure", SRC.nb8h);
   if(exh) R("1 seule personne exposée "+Math.max(...P.map(p=>p.jours))+" jour(s) par an au plus : mesurage exhaustif, chaque jour d’exposition est mesuré et comparé directement à la VLEP", SRC.exhaustif);
+  if(P.some(p=>p.continu)) R("exposition continue sur le poste : la VLEP 8 h est mesurée sur la durée du poste", SRC.nb8h);
+  if(ags.length && P.every(p=>p.rare) && !exh){ const j = Math.max(...P.map(p=>p.jours));
+    A("tâche réalisée "+j+" fois par an au plus : les jours proposés ne valent que si elle est programmée ces jours-là, à caler avec le client"+(isNaN(eff) && j<=NB_EVAL_INITIALE ? " (si une seule personne l’effectue : mesurage exhaustif possible)" : ""), SRC.jours); }
   const nbOk = !regl || exh || isNaN(nb) || nb>=NB_CAMPAGNE;
   if(r.type==="8h"){
     if(regl && !exh) R("3 mesures 8 h par GEH et par campagne, sur des travailleurs différents", SRC.nb8h);
